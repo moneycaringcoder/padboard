@@ -1,0 +1,24 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Build and test output
+/bin/
+/dist/
+/coverage.out
+/coverage.html
+*.test
+
+# Runtime data
+/data/
+*.log
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+
+/.internal/
