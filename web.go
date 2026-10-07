@@ -30,6 +30,7 @@ type rangeStats struct {
 	Key, Label                       string
 	Volume, Fees, Protocol, Creators float64
 	Trades, Launches, Graduations    int
+	AvgTrade                         float64
 	DVolume, DFees, DProtocol        float64
 	DLaunches, DTrades               float64
 	HasDelta                         bool
@@ -78,7 +79,6 @@ type column struct {
 	Charts       []chartView
 	Days         int
 	Week         rangeStats
-	AvgTrade     float64
 	QuoteShares  []segment
 	LaunchShares []segment
 	TopCoins     []tokenRow
@@ -163,7 +163,8 @@ func buildView(s *State) pageView {
 			r := sum(nowU-d, nowU+1)
 			prev := sum(nowU-2*d, nowU-d)
 			r.Key, r.Label = key, label
-			if prev.Volume > 0 || prev.Launches > 0 {
+			// Only compare against a prior window that is fully inside the data.
+			if first := firstHour(s, p, hours); first != 0 && nowU-2*d >= first && (prev.Volume > 0 || prev.Launches > 0) {
 				r.HasDelta = true
 				r.DVolume = pctChange(r.Volume, prev.Volume)
 				r.DFees = pctChange(r.Fees, prev.Fees)
@@ -177,10 +178,12 @@ func buildView(s *State) pageView {
 		col.All = sum(0, math.MaxInt64)
 		col.All.Key, col.All.Label = "all", "All time"
 		col.Ranges = []rangeStats{window("24h", "24 hours", 86400), window("7d", "7 days", 7*86400), window("30d", "30 days", 30*86400), col.All}
-		col.Week = col.Ranges[1]
-		if col.Week.Trades > 0 {
-			col.AvgTrade = col.Week.Volume / float64(col.Week.Trades)
+		for i := range col.Ranges {
+			if r := &col.Ranges[i]; r.Trades > 0 {
+				r.AvgTrade = r.Volume / float64(r.Trades)
+			}
 		}
+		col.Week = col.Ranges[1]
 
 		days := dailyAggs(s, p, hours, 86400)
 		col.Days = len(days)
@@ -366,7 +369,8 @@ func bars(vals []float64, labels []string, fy func(float64) string, series int) 
 		maxV = 1
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars" role="img">`, w, h)
+	d := newDither()
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars" role="img">%s`, w, h, d.defs())
 	plotW, plotH := w-padR, h-padT-padB
 	for _, f := range []float64{1.0 / 3, 2.0 / 3, 1} {
 		y := padT + plotH*(1-f)
@@ -376,11 +380,14 @@ func bars(vals []float64, labels []string, fy func(float64) string, series int) 
 	bw := math.Max(1, group*0.68)
 	for j, v := range vals {
 		bh := math.Max(2, plotH*v/maxV)
-		cls := "bar"
+		x, y := float64(j)*group+(group-bw)/2, padT+plotH-bh
+		tip := fmt.Sprintf("%s: %s", labels[j], fy(v))
 		if j == n-1 {
-			cls = fmt.Sprintf("bar last s%d", series)
+			fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="glow s%d" %s/>`, x, y, bw, bh, series, d.glow())
+			d.bar(&b, x, y, bw, bh, series, tip, "last")
+			continue
 		}
-		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" class="%s" data-tip="%s: %s"/>`, float64(j)*group+(group-bw)/2, padT+plotH-bh, bw, bh, math.Min(4, bw/2), cls, labels[j], fy(v))
+		d.bar(&b, x, y, bw, bh, 0, tip, "")
 	}
 	for _, j := range []int{0, n / 2, n - 1} {
 		anchor := "start"
@@ -586,4 +593,14 @@ func iconHTML(src, label string) template.HTML {
 	}
 	return template.HTML(fmt.Sprintf(`<img class="ico" src="%s" alt="%s" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML=this.nextElementSibling.innerHTML"><template>%s</template>`,
 		template.HTMLEscapeString(src), template.HTMLEscapeString(label), fb))
+}
+
+// firstHour is the earliest hour with activity for a platform (0 if none).
+func firstHour(s *State, p *platform, hours []int64) int64 {
+	for _, h := range hours {
+		if s.Hours[hourKey(p.Key, h)] != nil {
+			return h
+		}
+	}
+	return 0
 }

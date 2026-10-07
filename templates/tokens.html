@@ -8,22 +8,28 @@
       <button type="submit" name="pad" value="" {{if eq .Table.Pad ""}}class="on"{{end}}>All</button>
       {{range .Columns}}<button type="submit" name="pad" value="{{.Key}}" {{if eq $.Table.Pad .Key}}class="on"{{end}}><img src="{{.Logo}}" alt="">{{.Name}}</button>{{end}}
     </div>
-    <div class="seg">
-      <button type="submit" name="sort" value="volume" {{if eq .Table.Sort "volume"}}class="on"{{end}}>Volume</button>
-      <button type="submit" name="sort" value="fdv" {{if eq .Table.Sort "fdv"}}class="on"{{end}}>FDV</button>
-      <button type="submit" name="sort" value="trades" {{if eq .Table.Sort "trades"}}class="on"{{end}}>Trades</button>
-      <button type="submit" name="sort" value="new" {{if eq .Table.Sort "new"}}class="on"{{end}}>Newest</button>
-    </div>
     <input type="hidden" name="pad" value="{{.Table.Pad}}">
     <input type="hidden" name="sort" value="{{.Table.Sort}}">
   </form>
+  {{template "status" .}}
 </header>
 {{if .Empty}}
 <p class="muted">First sync is reading mainnet logs — refresh in a minute.</p>
 {{else}}
+{{$q := printf "pad=%s&q=%s" .Table.Pad .Table.Query}}
+{{$s := .Table.Sort}}
 <div class="card table">
+  <div class="scroll">
   <table class="coins all">
-    <thead><tr><th>#</th><th>Coin</th><th>Pad</th><th>Paired with</th><th class="r">Price</th><th class="r">FDV</th><th class="r">Volume</th><th class="r">Trades</th><th class="r">Age</th><th class="r">Status</th></tr></thead>
+    <thead><tr>
+      <th>#</th><th>Coin</th><th>Pad</th><th>Paired with</th>
+      <th class="r"><a href="?{{$q}}&sort=price" {{if eq $s "price"}}class="on"{{end}}>Price</a></th>
+      <th class="r"><a href="?{{$q}}&sort=fdv" {{if eq $s "fdv"}}class="on"{{end}}>FDV</a></th>
+      <th class="r"><a href="?{{$q}}&sort=volume" {{if eq $s "volume"}}class="on"{{end}}>Volume</a></th>
+      <th class="r"><a href="?{{$q}}&sort=trades" {{if eq $s "trades"}}class="on"{{end}}>Trades</a></th>
+      <th class="r"><a href="?{{$q}}&sort=new" {{if eq $s "new"}}class="on"{{end}}>Age</a></th>
+      <th class="r">Status</th>
+    </tr></thead>
     <tbody>
     {{range .Table.Rows}}{{$p := index $.Table.PlatformOf .Platform}}
     <tr>
@@ -41,6 +47,7 @@
     {{end}}
     </tbody>
   </table>
+  </div>
   {{with .Table}}
   <nav class="pager">
     <span class="muted">{{num .Total}} tokens · page {{.Page}} of {{.Last}}</span>

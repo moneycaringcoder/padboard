@@ -1,15 +1,15 @@
 {{template "head" .}}
 <main>
-{{if .Empty}}
-<header class="page"><h1>Overview</h1></header>
-<p class="muted">First sync is reading mainnet logs — refresh in a minute.</p>
-{{else}}
 <header class="page">
   <h1>Overview</h1>
-  <div class="seg" id="range">
+  {{if not .Empty}}<div class="seg" id="range">
     <button data-r="24h">24h</button><button data-r="7d" class="on">7d</button><button data-r="30d">30d</button><button data-r="all">All</button>
-  </div>
+  </div>{{end}}
+  {{template "status" .}}
 </header>
+{{if .Empty}}
+<p class="muted">First sync is reading mainnet logs — refresh in a minute.</p>
+{{else}}
 
 <div class="cols">
 {{range .Columns}}
@@ -48,14 +48,18 @@
     {{range .Charts}}<div class="chart-body c-{{.Key}}">{{.SVG}}</div>{{end}}
   </div>
 
-  <!-- Trading last 7 days -->
+  <!-- Trading, follows the range toggle -->
   <div class="card">
-    <h3>Trading, last 7 days</h3>
-    <div class="trio">
-      <div><b>{{k .Week.Trades}}</b><small>Trades</small></div>
-      <div><b>{{k .Week.Launches}}</b><small>Launches</small></div>
-      <div><b>{{usd .AvgTrade}}</b><small>Average trade</small></div>
+    {{range .Ranges}}
+    <div class="r-{{.Key}} rblock">
+      <h3>Trading, {{if eq .Key "all"}}all time{{else}}last {{.Label}}{{end}}</h3>
+      <div class="trio">
+        <div><b>{{k .Trades}}</b><small>Trades{{if .HasDelta}} {{delta .DTrades}}{{end}}</small></div>
+        <div><b>{{k .Launches}}</b><small>Launches{{if .HasDelta}} {{delta .DLaunches}}{{end}}</small></div>
+        <div><b>{{usd .AvgTrade}}</b><small>Average trade</small></div>
+      </div>
     </div>
+    {{end}}
     <p class="cap">Volume by pair, all time, on {{.Name}} pools</p>
     {{template "segbar" .QuoteShares}}
     <p class="cap">Launches, by what they are paired with</p>

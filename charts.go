@@ -268,7 +268,8 @@ func dualBars(series [][]float64, labels []string, fy func(float64) string, ow f
 	}
 	maxV := seriesMax(series)
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars" role="img">`, ow, oh)
+	d := newDither()
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars" role="img">%s`, ow, oh, d.defs())
 	overlayAxes(&b, ow, maxV, fy)
 	plotW, plotH := ow-oPadR, oh-oPadT-oPadB
 	group := plotW / float64(n)
@@ -280,7 +281,7 @@ func dualBars(series [][]float64, labels []string, fy func(float64) string, ow f
 			}
 			bh := plotH * s[j] / maxV
 			x := float64(j)*group + group*0.1 + bw*float64(i)
-			fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" class="bar s%d" data-tip="%s · %s: %s"/>`, x, oPadT+plotH-bh, bw, bh, math.Min(2, bw/2), i+1, labels[j], platforms[i].Name, fy(s[j]))
+			d.bar(&b, x, oPadT+plotH-bh, bw, bh, i+1, fmt.Sprintf("%s · %s: %s", labels[j], platforms[i].Name, fy(s[j])), "")
 		}
 	}
 	overlayXLabels(&b, labels, func(j int) float64 { return float64(j)*group + group/2 })
@@ -296,7 +297,8 @@ func dualLines(series [][]float64, labels []string, fy func(float64) string, ow 
 	}
 	maxV := seriesMax(series)
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars lines" role="img">`, ow, oh)
+	d := newDither()
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars lines" role="img">%s`, ow, oh, d.defs())
 	overlayAxes(&b, ow, maxV, fy)
 	plotW, plotH := ow-oPadR, oh-oPadT-oPadB
 	xAt := func(j int) float64 { return plotW * float64(j) / float64(n-1) }
@@ -318,8 +320,8 @@ func dualLines(series [][]float64, labels []string, fy func(float64) string, ow 
 		if first < 0 {
 			continue
 		}
-		fmt.Fprintf(&b, `<path d="%sL%.1f %.1f L%.1f %.1f Z" class="area s%d"/>`, path.String(), xAt(last), oPadT+plotH, xAt(first), oPadT+plotH, i+1)
-		fmt.Fprintf(&b, `<path d="%s" class="line s%d"/>`, path.String(), i+1)
+		fmt.Fprintf(&b, `<path d="%sL%.1f %.1f L%.1f %.1f Z" class="area s%d" %s/>`, path.String(), xAt(last), oPadT+plotH, xAt(first), oPadT+plotH, i+1, d.fill(i+1))
+		fmt.Fprintf(&b, `<path d="%s" class="line glowline s%d" %s/><path d="%s" class="line s%d"/>`, path.String(), i+1, d.glow(), path.String(), i+1)
 		for j, v := range s {
 			if v != 0 {
 				fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="5" class="pt s%d" data-tip="%s · %s: %s"/>`, xAt(j), yAt(v), i+1, labels[j], platforms[i].Name, fy(v))
@@ -338,7 +340,8 @@ func band(a, c []float64, labels []string, ow float64) template.HTML {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars band" role="img">`, ow, oh)
+	d := newDither()
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars band" role="img">%s`, ow, oh, d.defs())
 	plotW, plotH := ow-oPadR, oh-oPadT-oPadB
 	group := plotW / float64(n)
 	w := math.Max(0.8, group*0.8)
@@ -349,8 +352,8 @@ func band(a, c []float64, labels []string, ow float64) template.HTML {
 		}
 		sa := a[j] / tot
 		x := float64(j)*group + group*0.1
-		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s1" data-tip="%s · %s %.0f%%"/>`, x, oPadT+plotH*(1-sa), w, plotH*sa, labels[j], platforms[0].Name, sa*100)
-		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s2" data-tip="%s · %s %.0f%%"/>`, x, oPadT, w, plotH*(1-sa), labels[j], platforms[1].Name, (1-sa)*100)
+		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s1" %s data-tip="%s · %s %.0f%%"/>`, x, oPadT+plotH*(1-sa), w, plotH*sa, d.flat(1), labels[j], platforms[0].Name, sa*100)
+		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s2" %s data-tip="%s · %s %.0f%%"/>`, x, oPadT, w, plotH*(1-sa), d.flat(2), labels[j], platforms[1].Name, (1-sa)*100)
 	}
 	for _, f := range []float64{0.25, 0.5, 0.75} {
 		y := oPadT + plotH*(1-f)
@@ -386,7 +389,14 @@ var tokenSorts = map[string]func(a, b *tokenRow) bool{
 		return a.FDV > b.FDV
 	},
 	"trades": func(a, b *tokenRow) bool { return a.Swaps > b.Swaps },
-	"new":    func(a, b *tokenRow) bool { return a.Created > b.Created },
+	"price": func(a, b *tokenRow) bool {
+		ra, rb := a.Swaps >= 20, b.Swaps >= 20
+		if ra != rb {
+			return ra
+		}
+		return a.PriceUSD > b.PriceUSD
+	},
+	"new": func(a, b *tokenRow) bool { return a.Created > b.Created },
 }
 
 // queryTokens filters, sorts and pages tokens from URL parameters

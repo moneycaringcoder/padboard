@@ -2,7 +2,8 @@
 <main id="main">
 <header class="page">
   <h1>Charts</h1>
-  <div class="live"><span class="pulse"></span><span>live · synced {{ago .SyncedAt.Unix}} · refreshes every minute</span></div>
+  <span class="hint">both pads overlaid · refreshes every minute</span>
+  {{template "status" .}}
 </header>
 {{if .Empty}}
 <p class="muted">First sync is reading mainnet logs — refresh in a minute.</p>

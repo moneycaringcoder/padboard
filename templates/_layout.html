@@ -13,6 +13,8 @@
 <body data-range="7d" data-page="{{.Page}}">
 {{end}}
 
+{{define "status"}}<span class="status"><i class="pulse"></i>{{if .Empty}}first sync{{else}}synced {{ago .SyncedAt.Unix}}{{end}}</span>{{end}}
+
 {{define "dock"}}
 <nav class="dock">
   <a href="/" {{if eq .Page "overview"}}class="on"{{end}}>

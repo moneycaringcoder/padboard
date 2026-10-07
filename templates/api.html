@@ -2,7 +2,8 @@
 <main class="api">
 <header class="page">
   <h1>API</h1>
-  <div class="live"><span class="pulse"></span>free · 60 requests / minute / IP · no keys</div>
+  <span class="hint">free · 60 requests / minute / IP · no keys</span>
+  {{template "status" .}}
 </header>
 <p class="lede">Everything on this site is served from one hourly-to-5-minute snapshot of Ethereum mainnet. The same numbers are available as JSON. No auth, no paid tier, CORS open. Please cache: responses only change when a sync runs (every 5 minutes), so polling faster than that returns the same bytes.</p>
 
