@@ -60,14 +60,15 @@
   <!-- Top coins -->
   <div class="card">
     <h3>Top coins, all time</h3>
-    <table class="coins">
-      <thead><tr><th>#</th><th>Coin</th><th>Paired with</th><th class="r">Volume</th><th class="r">FDV</th><th class="r">Trades</th></tr></thead>
+    <div class="scroll">
+    <table class="coins compact">
+      <thead><tr><th>#</th><th>Coin</th><th class="c" title="Paired with">Pair</th><th class="r">Volume</th><th class="r">FDV</th><th class="r">Trades</th></tr></thead>
       <tbody>
       {{range .TopCoins}}
       <tr>
         <td class="rk">{{.Rank}}</td>
         <td><a class="coin" href="https://etherscan.io/token/{{.Address}}" target="_blank" rel="noopener">{{icon .Image .Symbol}}<span><b>{{.Symbol}}</b><small>{{.Name}}</small></span></a></td>
-        <td><span class="pair">{{icon .QuoteLogo .QuoteSymbol}}{{.QuoteSymbol}}</span></td>
+        <td class="c"><span class="pair" title="Paired with {{.QuoteSymbol}}" data-tip="Paired with {{.QuoteSymbol}}">{{icon .QuoteLogo .QuoteSymbol}}</span></td>
         <td class="r num"><b>{{usd .VolUSD}}</b></td>
         <td class="r num muted">{{usd .FDV}}</td>
         <td class="r num muted">{{k .Swaps}}</td>
@@ -75,6 +76,7 @@
       {{end}}
       </tbody>
     </table>
+    </div>
   </div>
 
   <!-- Fees and revenue -->
