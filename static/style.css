@@ -336,14 +336,12 @@ table.coins tbody tr:hover td:first-child { border-radius: 14px 0 0 14px; }
 table.coins tbody tr:hover td:last-child { border-radius: 0 14px 14px 0; }
 table.coins tbody tr:has(+ tr:hover) td { border-color: transparent; }
 
-/* footer: small, inline; clicking "X" reveals the avatar */
+/* footer: small, inline; avatar links to X */
 .foot { margin-top: 40px; }
-.foot .updated { margin: 0; position: relative; }
-.xpf { text-decoration: underline; color: var(--fg); }
-.xpf-card { display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; vertical-align: middle; max-width: 0; opacity: 0; overflow: hidden; transition: max-width .25s, opacity .25s; }
-.xpf.open + .xpf-card { max-width: 200px; opacity: 1; }
-.xpf-card img { width: 26px; height: 26px; border-radius: 50%; background: var(--card-2); flex: none; }
-.xpf-card b { color: var(--fg); font-size: 13px; }
+.foot .updated { margin: 0; }
+.xpf { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; color: var(--fg); text-decoration: underline; }
+.xpf img { width: 22px; height: 22px; border-radius: 50%; background: var(--card-2); }
+.xpf:hover img { box-shadow: 0 0 0 2px var(--fg); }
 
 /* code blocks (API page): line numbers, highlight, copy */
 .doc .code { position: relative; background: #0b0c0f; border: 1px solid var(--line); border-radius: 14px; padding: 12px 0; margin: 0 0 12px; overflow-x: auto; font: 500 12.5px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px); background-size: 16px 16px; }
