@@ -19,9 +19,6 @@
 <meta name="twitter:site" content="@0xmcc">
 <meta name="twitter:creator" content="@0xmcc">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"padboard","url":"{{.Origin}}/","description":"Stockereum vs Sender launchpad analytics from Ethereum mainnet.","author":{"@type":"Person","name":"0xmcc","url":"https://x.com/0xmcc"}}</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
 </head>
 <body data-range="7d" data-page="{{.Page}}">
@@ -88,6 +85,7 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
   };
   const SVGNS = 'http://www.w3.org/2000/svg';
   let curSvg = null, xh = null, curJ = -1;
+  const metas = new WeakMap(); // parsed data-chart, once per <svg>
   const leaveSvg = () => {
     if (xh) { xh.remove(); xh = null; }
     curSvg?.querySelectorAll('.hot').forEach(h => h.classList.remove('hot'));
@@ -97,7 +95,8 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
     const svg = e.target.closest ? e.target.closest('svg[data-chart]') : null;
     if (svg) {
       // Resolve the bucket under the cursor from x alone; show every series.
-      const m = JSON.parse(svg.dataset.chart);
+      let m = metas.get(svg);
+      if (!m) metas.set(svg, m = JSON.parse(svg.dataset.chart));
       const vb = svg.viewBox.baseVal, r = svg.getBoundingClientRect();
       const ux = (e.clientX - r.left) / r.width * vb.width;
       const n = m.labels.length;
@@ -109,7 +108,7 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
         const cx = m.mode === 'lines' ? m.x0 + m.w * j / (n - 1) : m.x0 + m.w * (j + 0.5) / n;
         xh.setAttribute('x1', cx); xh.setAttribute('x2', cx); xh.setAttribute('y1', 0); xh.setAttribute('y2', vb.height - 22);
         svg.querySelectorAll('.hot').forEach(h => h.classList.remove('hot'));
-        svg.querySelectorAll('g.bar').forEach(g => { const t = g.dataset.tip || ''; if (t.startsWith(m.labels[j] + ':') || t.startsWith(m.labels[j] + ' ·')) g.classList.add('hot'); });
+        svg.querySelectorAll(`g.bar[data-j="${j}"]`).forEach(g => g.classList.add('hot'));
         const rows = m.series.map(s => `<div class="row"><i class="dot ${s.cls}"></i>${s.name}<b>${s.values[j] || '–'}</b></div>`).join('');
         tip.innerHTML = `<div class="lbl">${m.labels[j]}</div>${rows}`;
         tip.hidden = false;
@@ -118,8 +117,6 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
       return;
     }
     if (curSvg) leaveSvg();
-    const el = e.target.closest ? e.target.closest('[data-tip]') : null;
-    if (el) { tip.textContent = el.dataset.tip; tip.hidden = false; place(e); } else tip.hidden = true;
   });
   document.addEventListener('mouseleave', leaveSvg);
 })();

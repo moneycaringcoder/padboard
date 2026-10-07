@@ -29,14 +29,15 @@ Environment:
 | `ALCHEMY_API_KEY` | —     | required                                         |
 | `PORT`          | `8080`  | HTTP listen port                                 |
 | `DATA_DIR`      | `data`  | where `state.json` (the snapshot) is written     |
-| `SYNC_INTERVAL` | `1h`    | how often new blocks are pulled                  |
+| `SYNC_INTERVAL` | `5m`    | how often new blocks are pulled                  |
 | `SYNC_ONCE`     | unset   | if set, exit after one sync (for cron-style use) |
 
 Pages: `/` overview, `/charts` (both pads overlaid, auto-refreshing), `/tokens`
 (every launch, paged by 100), `/api` (docs). JSON: `/api/v1/summary`,
 `/api/v1/daily?interval=day|hour`, `/api/v1/tokens?pad&sort&q&page`,
 `/api/v1/tokens/{address}`, `/api/snapshot.json`; free, 60 req/min per IP.
-`/healthz` for probes.
+`/healthz` for probes. Pages, JSON and static files are rendered once per sync
+and minute, served gzipped with content-hash ETags (304 when unchanged).
 
 ## Development
 

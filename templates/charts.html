@@ -26,13 +26,22 @@
 {{template "dock" .}}
 <script>
 // Background refresh: re-fetch this page every 60s and swap <main> in place.
-setInterval(async () => {
+// Hidden tabs skip polls and catch up when shown; an unchanged page (same
+// ETag, revalidated with a 304) is not re-parsed.
+let etag = '', last = Date.now();
+const refresh = async () => {
+  last = Date.now();
   try {
-    const html = await (await fetch(location.href, {cache: 'no-store'})).text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const res = await fetch(location.href, {cache: 'no-cache'});
+    const tag = res.headers.get('etag');
+    if (tag && tag === etag) return;
+    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
     document.getElementById('main').replaceWith(doc.getElementById('main'));
+    etag = tag;
   } catch {}
-}, 60000);
+};
+setInterval(() => { if (!document.hidden) refresh(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - last >= 60000) refresh(); });
 </script>
 </body>
 </html>

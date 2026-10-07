@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -70,23 +72,30 @@ func (c *collector) fillImages(ctx context.Context) error {
 		s.mu.Unlock()
 	}
 
-	// 2. Resolve each pointer to an image URL.
-	resolved := 0
+	// 2. Resolve each pointer to an image URL, 8 hosts at a time.
+	var resolved atomic.Int32
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
 	for _, t := range pending {
 		s.mu.RLock()
 		uri := t.MetaURI
 		s.mu.RUnlock()
-		img := resolveImage(ctx, c.prices.http, uri)
-		if img == "" {
-			img = "-"
-		} else {
-			resolved++
-		}
-		s.mu.Lock()
-		t.Image = img
-		s.mu.Unlock()
+		sem <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-sem }()
+			img := resolveImage(ctx, c.prices.http, uri)
+			if img == "" {
+				img = "-"
+			} else {
+				resolved.Add(1)
+			}
+			s.mu.Lock()
+			t.Image = img
+			s.mu.Unlock()
+		})
 	}
-	log.Printf("images: resolved %d/%d", resolved, len(pending))
+	wg.Wait()
+	log.Printf("images: resolved %d/%d", resolved.Load(), len(pending))
 	return nil
 }
 

@@ -39,6 +39,7 @@ func main() {
 
 	go func() {
 		for {
+			start := time.Now()
 			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Minute)
 			if err := c.sync(ctx); err != nil {
 				log.Printf("sync: %v", err)
@@ -47,7 +48,8 @@ func main() {
 			if os.Getenv("SYNC_ONCE") != "" {
 				os.Exit(0)
 			}
-			time.Sleep(interval)
+			// Start syncs every interval, not interval after the last one ended.
+			time.Sleep(interval - time.Since(start))
 		}
 	}()
 

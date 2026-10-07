@@ -281,7 +281,7 @@ func dualBars(series [][]float64, labels []string, fy func(float64) string, ow f
 			}
 			bh := plotH * s[j] / maxV
 			x := float64(j)*group + group*0.1 + bw*float64(i)
-			d.bar(&b, x, oPadT+plotH-bh, bw, bh, i+1, fmt.Sprintf("%s · %s: %s", labels[j], platforms[i].Name, fy(s[j])), "")
+			d.bar(&b, x, oPadT+plotH-bh, bw, bh, i+1, j, "")
 		}
 	}
 	overlayXLabels(&b, labels, func(j int) float64 { return float64(j)*group + group/2 })
@@ -324,7 +324,7 @@ func dualLines(series [][]float64, labels []string, fy func(float64) string, ow 
 		fmt.Fprintf(&b, `<path d="%s" class="line glowline s%d" %s/><path d="%s" class="line s%d"/>`, path.String(), i+1, d.glow(), path.String(), i+1)
 		for j, v := range s {
 			if v != 0 {
-				fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="5" class="pt s%d" data-tip="%s · %s: %s"/>`, xAt(j), yAt(v), i+1, labels[j], platforms[i].Name, fy(v))
+				fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="5" class="pt s%d"/>`, xAt(j), yAt(v), i+1)
 			}
 		}
 	}
@@ -361,8 +361,8 @@ func band(a, c []float64, labels []string, ow float64) template.HTML {
 		}
 		sa := a[j] / tot
 		x := float64(j)*group + group*0.1
-		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s1" %s data-tip="%s · %s %.0f%%"/>`, x, oPadT+plotH*(1-sa), w, plotH*sa, d.flat(1), labels[j], platforms[0].Name, sa*100)
-		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s2" %s data-tip="%s · %s %.0f%%"/>`, x, oPadT, w, plotH*(1-sa), d.flat(2), labels[j], platforms[1].Name, (1-sa)*100)
+		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s1" %s/>`, x, oPadT+plotH*(1-sa), w, plotH*sa, d.flat(1))
+		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s2" %s/>`, x, oPadT, w, plotH*(1-sa), d.flat(2))
 	}
 	for _, f := range []float64{0.25, 0.5, 0.75} {
 		y := oPadT + plotH*(1-f)

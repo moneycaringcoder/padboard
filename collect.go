@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
 	"math/big"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -228,13 +230,22 @@ func (c *collector) processRange(ctx context.Context, from, to uint64) (int, err
 		pools = append(pools, id)
 	}
 	s.mu.RUnlock()
+	// Pool-id chunks are independent filters; fetch them concurrently.
+	parts := make([][]Log, (len(pools)+poolTopicMax-1)/poolTopicMax)
+	errs := make([]error, len(parts))
+	var wg sync.WaitGroup
+	for k := range parts {
+		part := pools[k*poolTopicMax : min((k+1)*poolTopicMax, len(pools))]
+		wg.Go(func() {
+			parts[k], errs[k] = c.rpc.getLogs(ctx, logFilter{FromBlock: f.FromBlock, ToBlock: f.ToBlock, Address: []string{poolManager}, Topics: []any{tPMSwap, part}})
+		})
+	}
+	wg.Wait()
+	if err := errors.Join(errs...); err != nil {
+		return 0, err
+	}
 	var swaps []Log
-	for i := 0; i < len(pools); i += poolTopicMax {
-		part := pools[i:min(i+poolTopicMax, len(pools))]
-		ls, err := c.rpc.getLogs(ctx, logFilter{FromBlock: f.FromBlock, ToBlock: f.ToBlock, Address: []string{poolManager}, Topics: []any{tPMSwap, part}})
-		if err != nil {
-			return 0, err
-		}
+	for _, ls := range parts {
 		swaps = append(swaps, ls...)
 	}
 

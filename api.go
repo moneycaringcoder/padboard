@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net"
 	"net/http"
 	"sort"
@@ -172,7 +171,6 @@ func (c *collector) apiToken(w http.ResponseWriter, r *http.Request) {
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", " ")
@@ -235,57 +233,14 @@ func (rl *rateLimit) wrap(next http.Handler) http.Handler {
 	})
 }
 
-// cached memoises a handler's body per sync: the same request path yields the
-// same bytes until the state's SyncedAt changes. Conditional requests get 304.
-// ponytail: unbounded by path count; paths are a handful of fixed routes plus
-// token-list queries, cleared on every sync.
-func (c *collector) cached(next http.HandlerFunc) http.HandlerFunc {
-	type entry struct {
-		body []byte
-		etag string
-	}
-	var mu sync.Mutex
-	var at int64
-	store := map[string]entry{}
-	return func(w http.ResponseWriter, r *http.Request) {
+// apiHeaders adds CORS and the snapshot time to every API response, errors included.
+func (c *collector) apiHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.state.mu.RLock()
 		synced := c.state.SyncedAt
 		c.state.mu.RUnlock()
-		key := r.URL.RequestURI()
-		mu.Lock()
-		if synced != at {
-			store, at = map[string]entry{}, synced
-		}
-		e, ok := store[key]
-		mu.Unlock()
-		if !ok {
-			rec := &recorder{header: http.Header{}}
-			next(rec, r)
-			e = entry{body: rec.buf, etag: fmt.Sprintf(`"%d-%x"`, synced, len(rec.buf))}
-			mu.Lock()
-			store[key] = e
-			mu.Unlock()
-		}
-		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Cache-Control", "public, max-age=60")
-		w.Header().Set("ETag", e.etag)
 		w.Header().Set("Last-Modified", time.Unix(synced, 0).UTC().Format(http.TimeFormat))
-		if r.Header.Get("If-None-Match") == e.etag {
-			w.WriteHeader(http.StatusNotModified)
-			return
-		}
-		w.Write(e.body)
-	}
+		next.ServeHTTP(w, r)
+	})
 }
-
-// recorder captures a handler's body for the cache.
-type recorder struct {
-	header http.Header
-	buf    []byte
-	code   int
-}
-
-func (r *recorder) Header() http.Header         { return r.header }
-func (r *recorder) WriteHeader(code int)        { r.code = code }
-func (r *recorder) Write(b []byte) (int, error) { r.buf = append(r.buf, b...); return len(b), nil }

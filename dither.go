@@ -53,13 +53,14 @@ func (d dither) flat(series int) string {
 func (d dither) glow() string { return fmt.Sprintf(`filter="url(#%s-glow)"`, d.id) }
 
 // bar emits a dithered bar with a crisp cap; series 0 is the neutral tone.
-func (d dither) bar(b *strings.Builder, x, y, w, h float64, series int, tip string, extraClass string) {
+// j is the bucket index the client tooltip highlights on hover.
+func (d dither) bar(b *strings.Builder, x, y, w, h float64, series, j int, extraClass string) {
 	if h <= 0 {
 		return
 	}
 	cap := minf(2, h)
-	fmt.Fprintf(b, `<g class="bar s%d %s" data-tip="%s"><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" %s/><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="cap s%d"/></g>`,
-		series, extraClass, tip, x, y, w, h, d.fillFor(series, w), x, y, w, cap, series)
+	fmt.Fprintf(b, `<g class="bar s%d %s" data-j="%d"><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" %s/><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="cap s%d"/></g>`,
+		series, extraClass, j, x, y, w, h, d.fillFor(series, w), x, y, w, cap, series)
 }
 
 func minf(a, b float64) float64 {
