@@ -32,22 +32,62 @@
 <script>
 (() => {
   const tip = document.getElementById('tip');
-  let cur = null;
+  const place = (e) => {
+    const x = Math.min(Math.max(8, e.clientX + 16), innerWidth - tip.offsetWidth - 8);
+    tip.style.transform = `translate(${x}px, ${Math.max(8, e.clientY - tip.offsetHeight - 14)}px)`;
+  };
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  let curSvg = null, xh = null, curJ = -1;
+  const leaveSvg = () => {
+    if (xh) { xh.remove(); xh = null; }
+    curSvg?.querySelectorAll('.hot').forEach(h => h.classList.remove('hot'));
+    curSvg = null; curJ = -1; tip.hidden = true;
+  };
   document.addEventListener('mousemove', e => {
+    const svg = e.target.closest ? e.target.closest('svg[data-chart]') : null;
+    if (svg) {
+      // Resolve the bucket under the cursor from x alone; show every series.
+      const m = JSON.parse(svg.dataset.chart);
+      const vb = svg.viewBox.baseVal, r = svg.getBoundingClientRect();
+      const ux = (e.clientX - r.left) / r.width * vb.width;
+      const n = m.labels.length;
+      let j = m.mode === 'lines' ? Math.round((ux - m.x0) / (m.w / (n - 1))) : Math.floor((ux - m.x0) / (m.w / n));
+      j = Math.max(0, Math.min(n - 1, j));
+      if (svg !== curSvg) { leaveSvg(); curSvg = svg; xh = document.createElementNS(SVGNS, 'line'); xh.setAttribute('class', 'xh'); svg.appendChild(xh); }
+      if (j !== curJ) {
+        curJ = j;
+        const cx = m.mode === 'lines' ? m.x0 + m.w * j / (n - 1) : m.x0 + m.w * (j + 0.5) / n;
+        xh.setAttribute('x1', cx); xh.setAttribute('x2', cx); xh.setAttribute('y1', 0); xh.setAttribute('y2', vb.height - 22);
+        svg.querySelectorAll('.hot').forEach(h => h.classList.remove('hot'));
+        svg.querySelectorAll('g.bar').forEach(g => { const t = g.dataset.tip || ''; if (t.startsWith(m.labels[j] + ':') || t.startsWith(m.labels[j] + ' ·')) g.classList.add('hot'); });
+        const rows = m.series.map(s => `<div class="row"><i class="dot ${s.cls}"></i>${s.name}<b>${s.values[j] || '–'}</b></div>`).join('');
+        tip.innerHTML = `<div class="lbl">${m.labels[j]}</div>${rows}`;
+        tip.hidden = false;
+      }
+      place(e);
+      return;
+    }
+    if (curSvg) leaveSvg();
     const el = e.target.closest ? e.target.closest('[data-tip]') : null;
-    if (el !== cur) {
-      cur = el;
-      for (const h of document.querySelectorAll('.hot')) h.classList.remove('hot');
-      if (el) { el.classList.add('hot'); tip.textContent = el.dataset.tip; tip.hidden = false; } else tip.hidden = true;
-    }
-    if (el) {
-      const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
-      tip.style.transform = `translate(${x}px, ${e.clientY - tip.offsetHeight - 12}px)`;
-    }
+    if (el) { tip.textContent = el.dataset.tip; tip.hidden = false; place(e); } else tip.hidden = true;
   });
+  document.addEventListener('mouseleave', leaveSvg);
 })();
 </script>
 {{end}}
 {{define "foot"}}
-<p class="updated">Last updated at {{.SyncedAt.Format "15:04:05"}} UTC, {{.SyncedAt.Format "Jan 2"}} · block {{num (int .Head)}} · ETH {{usd .ETHUSD}} · <a href="/api/snapshot.json">snapshot.json</a></p>
+<footer class="foot">
+  <p class="updated">Last updated at {{.SyncedAt.Format "15:04:05"}} UTC, {{.SyncedAt.Format "Jan 2"}} · block {{num (int .Head)}} · ETH {{usd .ETHUSD}} · <a href="/api/snapshot.json">snapshot.json</a></p>
+  <div class="follow">
+    <div class="xcard">
+      <div class="xbanner"></div>
+      <img class="xavatar" src="https://unavatar.io/x/0xmcc" alt="" referrerpolicy="no-referrer">
+      <svg class="xlogo" viewBox="0 0 24 24"><path d="M18.9 2H22l-7.3 8.3L23 22h-6.8l-5.3-6.9L4.8 22H1.7l7.8-8.9L1 2h7l4.8 6.3L18.9 2Zm-1.2 18h1.9L7.4 3.9H5.4L17.7 20Z"/></svg>
+      <b>0xmcc</b><span>@0xmcc</span>
+      <p>built padboard · launchpads, side by side</p>
+      <a class="xfollow" href="https://x.com/0xmcc" target="_blank" rel="noopener">Follow</a>
+    </div>
+    Follow me on <a href="https://x.com/0xmcc" target="_blank" rel="noopener">X</a>
+  </div>
+</footer>
 {{end}}

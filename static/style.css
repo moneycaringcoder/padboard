@@ -315,3 +315,47 @@ th a.on::after { content: " ↓"; color: var(--up); }
   .months th:nth-child(n+5), .months td:nth-child(n+5) { display: none; }
   .totals b { font-size: 13px; }
 }
+
+/* dot-grid page background */
+body { background-image: radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px); background-size: 28px 28px; }
+
+/* multi-series tooltip + crosshair */
+.tip { white-space: normal; min-width: 150px; padding: 8px 10px; background: #16181d; color: var(--fg); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+.tip .lbl { color: var(--muted); font-size: 11.5px; margin-bottom: 4px; }
+.tip .row { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); }
+.tip .row b { margin-left: auto; color: var(--fg); padding-left: 14px; font-variant-numeric: tabular-nums; }
+.tip .dot { width: 8px; height: 8px; border-radius: 2px; }
+.tip .dot.s1 { background: var(--c1); } .tip .dot.s2 { background: var(--c2); } .tip .dot.s0 { background: #b4b8c0; }
+.bars .xh { stroke: rgba(255,255,255,.35); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.bars { cursor: crosshair; }
+
+/* floating row hover (see .internal reference) */
+table.coins td { position: relative; transition: background .15s, border-color .15s; }
+table.coins tbody tr:hover td { background: #1b1e24; border-color: transparent; box-shadow: 0 14px 34px -14px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.04); }
+table.coins tbody tr:hover td:first-child { border-radius: 14px 0 0 14px; }
+table.coins tbody tr:hover td:last-child { border-radius: 0 14px 14px 0; }
+table.coins tbody tr:has(+ tr:hover) td { border-color: transparent; }
+
+/* footer + follow card */
+.foot { margin-top: 40px; display: flex; flex-direction: column; align-items: center; gap: 36px; }
+.foot .updated { margin: 0; }
+.follow { position: relative; color: var(--muted); font-size: 22px; font-weight: 600; padding: 8px 0 26px; }
+.follow > a { color: var(--fg); text-decoration: underline; text-underline-offset: 6px; }
+.xcard { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translate(-50%, 8px) scale(.98); width: 300px; background: #0f1014; border: 1px solid rgba(255,255,255,.14); border-radius: 18px; padding: 0 20px 18px; opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; text-align: left; font-size: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.6); }
+.follow:hover .xcard { opacity: 1; transform: translate(-50%, 0) scale(1); pointer-events: auto; }
+.xbanner { height: 84px; margin: 0 -20px 0; border-radius: 17px 17px 0 0; background: linear-gradient(120deg, var(--c1), var(--c2)); opacity: .85; }
+.xavatar { width: 64px; height: 64px; border-radius: 50%; border: 4px solid #0f1014; margin-top: -32px; display: block; background: var(--card-2); }
+.xlogo { position: absolute; right: 20px; top: 98px; width: 18px; height: 18px; fill: var(--fg); }
+.xcard b { display: block; margin-top: 10px; font-size: 16px; color: var(--fg); }
+.xcard span { color: var(--muted); font-size: 13px; font-weight: 600; }
+.xcard p { margin: 8px 0 12px; color: var(--fg); font-size: 13.5px; font-weight: 500; }
+.xfollow { display: inline-block; background: var(--fg); color: var(--bg); font-weight: 800; font-size: 13px; padding: 7px 16px; border-radius: 999px; }
+
+/* code blocks (API page): line numbers, highlight, copy */
+.doc .code { position: relative; background: #0b0c0f; border: 1px solid var(--line); border-radius: 14px; padding: 12px 0; margin: 0 0 12px; overflow-x: auto; font: 500 12.5px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px); background-size: 16px 16px; }
+.doc .code .l { display: flex; gap: 14px; padding: 0 16px; white-space: pre; }
+.doc .code .ln { color: var(--dim); min-width: 18px; text-align: right; user-select: none; }
+.doc .code .kw { color: #f08a3e; } .doc .code .str { color: #b58cff; } .doc .code .url { color: #e6e4dc; } .doc .code .flag { color: #8f939c; }
+.doc .copy { position: absolute; right: 10px; top: 8px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.doc .copy:hover { color: var(--fg); }
+.doc .copy svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }

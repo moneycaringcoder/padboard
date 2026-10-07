@@ -46,5 +46,25 @@
 {{template "foot" .}}
 </main>
 {{template "dock" .}}
+<script>
+// Code blocks: line numbers, light shell highlighting, copy button.
+for (const pre of document.querySelectorAll('.doc pre')) {
+  const raw = pre.textContent;
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const hl = s => esc(s)
+    .replace(/(&quot;|'|")([^'"]*?)\1/g, '<span class="str">$1$2$1</span>')
+    .replace(/(https?:\/\/[^\s'"|]+)/g, '<span class="url">$1</span>')
+    .replace(/(^|\s)(curl|jq)(?=\s)/g, '$1<span class="kw">$2</span>')
+    .replace(/(\s)(-[a-zA-Z]+)(?=\s)/g, '$1<span class="flag">$2</span>');
+  const box = document.createElement('div'); box.className = 'code';
+  box.innerHTML = raw.split('\n').map((l, i) => `<div class="l"><span class="ln">${i + 1}</span><span>${hl(l)}</span></div>`).join('') +
+    `<button class="copy" title="Copy"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>`;
+  box.querySelector('.copy').addEventListener('click', async (e) => {
+    await navigator.clipboard.writeText(raw);
+    e.currentTarget.style.color = 'var(--up)'; setTimeout(() => e.currentTarget && (e.currentTarget.style.color = ''), 900);
+  });
+  pre.replaceWith(box);
+}
+</script>
 </body>
 </html>

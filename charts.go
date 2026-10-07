@@ -269,7 +269,7 @@ func dualBars(series [][]float64, labels []string, fy func(float64) string, ow f
 	maxV := seriesMax(series)
 	var b strings.Builder
 	d := newDither()
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars" role="img">%s`, ow, oh, d.defs())
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars" role="img" %s>%s`, ow, oh, overlayMeta("bars", ow-oPadR, labels, series, fy), d.defs())
 	overlayAxes(&b, ow, maxV, fy)
 	plotW, plotH := ow-oPadR, oh-oPadT-oPadB
 	group := plotW / float64(n)
@@ -298,7 +298,7 @@ func dualLines(series [][]float64, labels []string, fy func(float64) string, ow 
 	maxV := seriesMax(series)
 	var b strings.Builder
 	d := newDither()
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars lines" role="img">%s`, ow, oh, d.defs())
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars lines" role="img" %s>%s`, ow, oh, overlayMeta("lines", ow-oPadR, labels, series, fy), d.defs())
 	overlayAxes(&b, ow, maxV, fy)
 	plotW, plotH := ow-oPadR, oh-oPadT-oPadB
 	xAt := func(j int) float64 { return plotW * float64(j) / float64(n-1) }
@@ -341,7 +341,16 @@ func band(a, c []float64, labels []string, ow float64) template.HTML {
 	}
 	var b strings.Builder
 	d := newDither()
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars band" role="img">%s`, ow, oh, d.defs())
+	pcts := func(x, y []float64) []float64 {
+		out := make([]float64, len(x))
+		for j := range x {
+			if t := x[j] + y[j]; t > 0 {
+				out[j] = x[j] / t * 100
+			}
+		}
+		return out
+	}
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars band" role="img" %s>%s`, ow, oh, overlayMeta("bars", ow-oPadR, labels, [][]float64{pcts(a, c), pcts(c, a)}, fmtPct), d.defs())
 	plotW, plotH := ow-oPadR, oh-oPadT-oPadB
 	group := plotW / float64(n)
 	w := math.Max(0.8, group*0.8)

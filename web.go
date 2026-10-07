@@ -370,7 +370,8 @@ func bars(vals []float64, labels []string, fy func(float64) string, series int) 
 	}
 	var b strings.Builder
 	d := newDither()
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars" role="img">%s`, w, h, d.defs())
+	meta := chartAttr(chartMeta{Mode: "bars", X0: 0, W: w - padR, Labels: labels, Series: []chartSeries{{Name: platforms[series-1].Name, Class: fmt.Sprintf("s%d", series), Values: formatSeries(vals, fy)}}})
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars" role="img" %s>%s`, w, h, meta, d.defs())
 	plotW, plotH := w-padR, h-padT-padB
 	for _, f := range []float64{1.0 / 3, 2.0 / 3, 1} {
 		y := padT + plotH*(1-f)
