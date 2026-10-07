@@ -77,17 +77,7 @@
 {{end}}
 {{define "foot"}}
 <footer class="foot">
-  <p class="updated">Last updated at {{.SyncedAt.Format "15:04:05"}} UTC, {{.SyncedAt.Format "Jan 2"}} · block {{num (int .Head)}} · ETH {{usd .ETHUSD}} · <a href="/api/snapshot.json">snapshot.json</a></p>
-  <div class="follow">
-    <div class="xcard">
-      <div class="xbanner"></div>
-      <img class="xavatar" src="https://unavatar.io/x/0xmcc" alt="" referrerpolicy="no-referrer">
-      <svg class="xlogo" viewBox="0 0 24 24"><path d="M18.9 2H22l-7.3 8.3L23 22h-6.8l-5.3-6.9L4.8 22H1.7l7.8-8.9L1 2h7l4.8 6.3L18.9 2Zm-1.2 18h1.9L7.4 3.9H5.4L17.7 20Z"/></svg>
-      <b>0xmcc</b><span>@0xmcc</span>
-      <p>built padboard · launchpads, side by side</p>
-      <a class="xfollow" href="https://x.com/0xmcc" target="_blank" rel="noopener">Follow</a>
-    </div>
-    Follow me on <a href="https://x.com/0xmcc" target="_blank" rel="noopener">X</a>
-  </div>
+  <p class="updated">Last updated at {{.SyncedAt.Format "15:04:05"}} UTC, {{.SyncedAt.Format "Jan 2"}} · block {{num (int .Head)}} · ETH {{usd .ETHUSD}} · <a href="/api/snapshot.json">snapshot.json</a>
+    · Follow me on <a href="#" class="xpf" onclick="this.classList.toggle('open');return false">X</a><a class="xpf-card" href="https://x.com/0xmcc" target="_blank" rel="noopener"><img src="https://unavatar.io/x/0xmcc" alt="" referrerpolicy="no-referrer"><b>@0xmcc</b></a></p>
 </footer>
 {{end}}

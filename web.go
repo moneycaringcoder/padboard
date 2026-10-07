@@ -21,7 +21,16 @@ var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 	"add":  func(a, b int) int { return a + b },
 	"sub":  func(a, b int) int { return a - b },
 	"icon": iconHTML,
-	"int":  func(v uint64) int { return int(v) },
+	"trend": func(p float64) string {
+		switch {
+		case p > 0:
+			return "up"
+		case p < 0:
+			return "down"
+		}
+		return ""
+	},
+	"int": func(v uint64) int { return int(v) },
 }).ParseFS(assets, "templates/*.html"))
 
 // rangeStats sums activity over a window; D* are percentage deltas vs the
@@ -175,6 +184,14 @@ func buildView(s *State) pageView {
 			return r
 		}
 		col.Today = sum(midnight, nowU+1)
+		// Same hours of yesterday, so the ticker colour compares like with like.
+		if y := sum(midnight-86400, nowU-86400+1); y.Volume > 0 || y.Launches > 0 {
+			col.Today.HasDelta = true
+			col.Today.DVolume = pctChange(col.Today.Volume, y.Volume)
+			col.Today.DFees = pctChange(col.Today.Fees, y.Fees)
+			col.Today.DLaunches = pctChange(float64(col.Today.Launches), float64(y.Launches))
+			col.Today.DTrades = pctChange(float64(col.Today.Trades), float64(y.Trades))
+		}
 		col.All = sum(0, math.MaxInt64)
 		col.All.Key, col.All.Label = "all", "All time"
 		col.Ranges = []rangeStats{window("24h", "24 hours", 86400), window("7d", "7 days", 7*86400), window("30d", "30 days", 30*86400), col.All}
