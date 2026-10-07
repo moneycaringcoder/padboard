@@ -351,3 +351,14 @@ table.coins tbody tr:has(+ tr:hover) td { border-color: transparent; }
 .doc .copy { position: absolute; right: 10px; top: 8px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer; display: grid; place-items: center; }
 .doc .copy:hover { color: var(--fg); }
 .doc .copy svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+
+/* top bar follows you; page content cross-fades between routes */
+.page { position: sticky; top: 0; z-index: 15; margin: -26px -32px 20px; padding: 18px 32px 14px; background: rgba(12,13,16,.82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+.ticker + .page { margin-top: 0; }
+.ticker { position: relative; z-index: 16; }
+@view-transition { navigation: auto; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .22s; animation-timing-function: ease; }
+main { animation: enter .28s ease both; }
+@keyframes enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { main { animation: none; } ::view-transition-old(root), ::view-transition-new(root) { animation: none; } }
+@media (max-width: 640px) { .page { margin: -16px -16px 16px; padding: 12px 16px 10px; } }

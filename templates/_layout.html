@@ -3,14 +3,50 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}} · padboard</title>
-<meta name="description" content="Stockereum and Sender launchpad analytics, side by side, read from Ethereum mainnet.">
+<meta name="view-transition" content="same-origin">
+<title>{{.Title}} · padboard — Stockereum vs Sender launchpad analytics</title>
+<meta name="description" content="Stockereum and Sender launchpad analytics side by side: volume, launches, fees, protocol revenue and platform-token valuation, read from Ethereum mainnet and refreshed every 5 minutes.">
+<link rel="canonical" href="{{.Origin}}{{.Path}}">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<meta name="theme-color" content="#0c0d10">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="padboard">
+<meta property="og:title" content="{{.Title}} · padboard">
+<meta property="og:description" content="Launchpads, side by side. Stockereum vs Sender on Ethereum mainnet — volume, launches, fees, valuation.">
+<meta property="og:url" content="{{.Origin}}{{.Path}}">
+<meta property="og:image" content="{{.Origin}}/static/og.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@0xmcc">
+<meta name="twitter:creator" content="@0xmcc">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"padboard","url":"{{.Origin}}/","description":"Stockereum vs Sender launchpad analytics from Ethereum mainnet.","author":{"@type":"Person","name":"0xmcc","url":"https://x.com/0xmcc"}}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body data-range="7d" data-page="{{.Page}}">
+{{end}}
+
+{{define "llms.txt"}}# padboard
+
+> Launchpads, side by side. Stockereum vs Sender — Ethereum mainnet launchpad analytics (volume, launches, trades, fees, protocol revenue, platform-token price/FDV/burn), read directly from chain logs and refreshed every 5 minutes.
+
+Both platforms launch tokens into Uniswap v4 pools. Volume is the quote-side delta of each Swap on a launched pool; ETH/WETH quotes are priced hourly, other quotes at snapshot spot. Fees are what the contracts credited or collected (Stockereum FeeEscrow.Credited, Sender locker FeesCollected / hook FeeDistributed), not volume x rate. Token prices derive from the pool sqrtPriceX96 after the latest swap; FDV = price x totalSupply().
+
+## Pages
+- {{.Origin}}/ : Overview — two columns (Stockereum | Sender), 24h/7d/30d/all windows, charts, fee routing, buyback & burn, top coins
+- {{.Origin}}/charts : both platforms overlaid in every chart, dominance bands, FDV / 7d fees
+- {{.Origin}}/tokens : every launched token, sortable, 100 per page
+- {{.Origin}}/api : API documentation
+
+## JSON API (no auth, CORS open, 60 requests/min per IP)
+- {{.Origin}}/api/v1/summary : per-platform today / 24h / 7d / 30d / all windows and platform token stats
+- {{.Origin}}/api/v1/daily?interval=day|hour : time series per platform
+- {{.Origin}}/api/v1/tokens?pad=stockereum|sender&sort=volume|fdv|price|trades|new&q=&page= : token list
+- {{.Origin}}/api/v1/tokens/{address} : one token
+- {{.Origin}}/api/snapshot.json : raw snapshot
+
+Responses carry ETag / Last-Modified and only change when a sync runs. Data is 12 confirmations behind the tip; not audited. Author: @0xmcc (https://x.com/0xmcc).
 {{end}}
 
 {{define "status"}}<span class="status"><i class="pulse"></i>{{if .Empty}}first sync{{else}}synced {{ago .SyncedAt.Unix}}{{end}}</span>{{end}}

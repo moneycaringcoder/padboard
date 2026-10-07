@@ -116,6 +116,8 @@ type pageView struct {
 	Charts      []wallChart // charts page
 	Table       tokenTable  // tokens page
 	Host        string      // api page
+	Origin      string      // scheme://host for canonical/og tags
+	Path        string
 }
 
 type dayAgg struct {
@@ -550,29 +552,50 @@ func shortAddr(a string) string {
 
 func (c *collector) routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("/static/", http.FileServer(http.FS(assets)))
+	mux.Handle("/static/", cacheStatic(http.FileServer(http.FS(assets))))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		c.state.mu.RLock()
 		head := c.state.Head
 		c.state.mu.RUnlock()
 		fmt.Fprintf(w, "ok head=%d\n", head)
 	})
+	mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprintf(w, "User-agent: *\nAllow: /\nDisallow: /api/snapshot.json\nSitemap: %s/sitemap.xml\n", origin(r))
+	})
+	mux.HandleFunc("/sitemap.xml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		o := origin(r)
+		fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
+		for _, p := range []string{"/", "/charts", "/tokens", "/api"} {
+			fmt.Fprintf(w, `<url><loc>%s%s</loc><changefreq>hourly</changefreq></url>`, o, p)
+		}
+		fmt.Fprint(w, `</urlset>`)
+	})
+	mux.HandleFunc("/llms.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		tmpl.ExecuteTemplate(w, "llms.txt", map[string]string{"Origin": origin(r)})
+	})
+
 	api := http.NewServeMux()
 	api.HandleFunc("/api/snapshot.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		http.ServeFile(w, r, c.state.path)
 	})
-	api.HandleFunc("/api/v1/summary", c.apiSummary)
-	api.HandleFunc("/api/v1/daily", c.apiDaily)
-	api.HandleFunc("/api/v1/tokens", c.apiTokens)
-	api.HandleFunc("/api/v1/tokens/{address}", c.apiToken)
+	api.HandleFunc("/api/v1/summary", c.cached(c.apiSummary))
+	api.HandleFunc("/api/v1/daily", c.cached(c.apiDaily))
+	api.HandleFunc("/api/v1/tokens", c.cached(c.apiTokens))
+	api.HandleFunc("/api/v1/tokens/{address}", c.cached(c.apiToken))
 	mux.Handle("/api/", newRateLimit().wrap(api))
 
 	page := func(name string, build func(*http.Request) pageView) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			if err := tmpl.ExecuteTemplate(w, name, build(r)); err != nil {
+			pv := build(r)
+			pv.Origin = origin(r)
+			pv.Path = r.URL.Path
+			if err := tmpl.ExecuteTemplate(w, name, pv); err != nil {
 				http.Error(w, err.Error(), 500)
 			}
 		}
@@ -588,7 +611,40 @@ func (c *collector) routes() http.Handler {
 		pv.Host = r.Host
 		return pv
 	}))
-	return mux
+	return secure(mux)
+}
+
+// origin reconstructs the public origin, honouring a reverse proxy's scheme.
+func origin(r *http.Request) string {
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" && strings.HasPrefix(r.Host, "127.0.0.1") {
+		scheme = "http"
+	}
+	return scheme + "://" + r.Host
+}
+
+// secure adds baseline security headers to every response.
+func secure(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		h.Set("Content-Security-Policy", "default-src 'self'; img-src * data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// cacheStatic lets browsers keep embedded assets for a day.
+func cacheStatic(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func logoOf(q *Quote) string {

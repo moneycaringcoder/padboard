@@ -2,10 +2,10 @@
 <main class="api">
 <header class="page">
   <h1>API</h1>
-  <span class="hint">free · 60 requests / minute / IP · no keys</span>
+  <span class="hint">JSON for everything on this site</span>
   {{template "status" .}}
 </header>
-<p class="lede">Everything on this site is served from one hourly-to-5-minute snapshot of Ethereum mainnet. The same numbers are available as JSON. No auth, no paid tier, CORS open. Please cache: responses only change when a sync runs (every 5 minutes), so polling faster than that returns the same bytes.</p>
+<p class="lede">Everything on this site is served from one snapshot of Ethereum mainnet, refreshed every 5 minutes. The same numbers are available as JSON, CORS open. Responses carry <code>ETag</code> / <code>Last-Modified</code> and change only when a sync runs.</p>
 
 <div class="card doc">
   <h3>GET <code>/api/v1/summary</code></h3>
