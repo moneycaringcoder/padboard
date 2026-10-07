@@ -22,9 +22,23 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v={{.Version}}">
 </head>
 <body data-range="7d" data-page="{{.Page}}">
+{{if .Ticker}}
+<div class="ticker">
+  <div class="tk-label">Today</div>
+  {{range .Ticker}}
+  <div class="tk p{{.Idx}}">
+    <img src="{{.Logo}}" alt=""><b>{{.Name}}</b>
+    <span><em class="{{trend .Today.DVolume}}">{{usd .Today.Volume}}</em> volume</span>
+    <span><em class="{{trend .Today.DTrades}}">{{k .Today.Trades}}</em> trades</span>
+    <span><em class="{{trend .Today.DLaunches}}">{{k .Today.Launches}}</em> launches</span>
+    <span><em class="{{trend .Today.DFees}}">{{usd .Today.Fees}}</em> fees</span>
+  </div>
+  {{end}}
+</div>
+{{end}}
 {{end}}
 
 {{define "llms.txt"}}# padboard

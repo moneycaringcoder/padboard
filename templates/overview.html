@@ -1,19 +1,5 @@
 {{template "head" .}}
 <main>
-{{if not .Empty}}
-<div class="ticker">
-  <div class="tk-label">Today</div>
-  {{range .Columns}}
-  <div class="tk p{{.Idx}}">
-    <img src="{{.Logo}}" alt=""><b>{{.Name}}</b>
-    <span><em class="{{trend .Today.DVolume}}">{{usd .Today.Volume}}</em> volume</span>
-    <span><em class="{{trend .Today.DTrades}}">{{k .Today.Trades}}</em> trades</span>
-    <span><em class="{{trend .Today.DLaunches}}">{{k .Today.Launches}}</em> launches</span>
-    <span><em class="{{trend .Today.DFees}}">{{usd .Today.Fees}}</em> fees</span>
-  </div>
-  {{end}}
-</div>
-{{end}}
 <header class="page">
   <h1>Overview</h1>
   {{if not .Empty}}<div class="seg" id="range">

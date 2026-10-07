@@ -118,6 +118,8 @@ type pageView struct {
 	Host        string      // api page
 	Origin      string      // scheme://host for canonical/og tags
 	Path        string
+	Ticker      []tickerItem // today line, every page
+	Version     string       // cache-busting token for static assets
 }
 
 type dayAgg struct {
@@ -127,12 +129,21 @@ type dayAgg struct {
 
 // envelope fills the shared header/footer fields. Caller holds s.mu (read).
 func envelope(s *State) pageView {
-	pv := pageView{Head: s.Head, HeadTime: time.Unix(s.HeadTime, 0).UTC(), SyncedAt: time.Unix(s.SyncedAt, 0).UTC()}
+	pv := pageView{Head: s.Head, HeadTime: time.Unix(s.HeadTime, 0).UTC(), SyncedAt: time.Unix(s.SyncedAt, 0).UTC(), Version: assetVersion}
 	if q := s.Quotes[ethAddr]; q != nil {
 		pv.ETHUSD = q.USD
 	}
+	if hours := s.hours(); len(hours) > 0 {
+		now := time.Now().UTC()
+		for i, p := range platforms {
+			pv.Ticker = append(pv.Ticker, tickerItem{platform: p, Idx: i + 1, Today: todayStats(s, p, hours, now)})
+		}
+	}
 	return pv
 }
+
+// assetVersion busts browser caches for embedded static files on each start.
+var assetVersion = fmt.Sprint(time.Now().Unix())
 
 func buildView(s *State) pageView {
 	s.mu.RLock()
@@ -146,30 +157,10 @@ func buildView(s *State) pageView {
 	}
 	now := time.Now().UTC()
 	nowU := now.Unix()
-	midnight := now.Truncate(24 * time.Hour).Unix()
 
 	for i, p := range platforms {
 		col := column{platform: p, Idx: i + 1}
-		sum := func(from, to int64) rangeStats {
-			var r rangeStats
-			for _, h := range hours {
-				if h < from || h >= to {
-					continue
-				}
-				a := s.Hours[hourKey(p.Key, h)]
-				if a == nil {
-					continue
-				}
-				r.Volume += a.VolUSD
-				r.Fees += a.CreatorUSD + a.HolderUSD + a.PlatformUSD
-				r.Protocol += a.PlatformUSD + a.LaunchFees
-				r.Creators += a.CreatorUSD
-				r.Trades += a.Swaps
-				r.Launches += a.Launches
-				r.Graduations += a.Graduations
-			}
-			return r
-		}
+		sum := func(from, to int64) rangeStats { return sumRange(s, p, hours, from, to) }
 		window := func(key, label string, d int64) rangeStats {
 			r := sum(nowU-d, nowU+1)
 			prev := sum(nowU-2*d, nowU-d)
@@ -185,15 +176,7 @@ func buildView(s *State) pageView {
 			}
 			return r
 		}
-		col.Today = sum(midnight, nowU+1)
-		// Same hours of yesterday, so the ticker colour compares like with like.
-		if y := sum(midnight-86400, nowU-86400+1); y.Volume > 0 || y.Launches > 0 {
-			col.Today.HasDelta = true
-			col.Today.DVolume = pctChange(col.Today.Volume, y.Volume)
-			col.Today.DFees = pctChange(col.Today.Fees, y.Fees)
-			col.Today.DLaunches = pctChange(float64(col.Today.Launches), float64(y.Launches))
-			col.Today.DTrades = pctChange(float64(col.Today.Trades), float64(y.Trades))
-		}
+		col.Today = todayStats(s, p, hours, now)
 		col.All = sum(0, math.MaxInt64)
 		col.All.Key, col.All.Label = "all", "All time"
 		col.Ranges = []rangeStats{window("24h", "24 hours", 86400), window("7d", "7 days", 7*86400), window("30d", "30 days", 30*86400), col.All}
@@ -677,4 +660,49 @@ func firstHour(s *State, p *platform, hours []int64) int64 {
 		}
 	}
 	return 0
+}
+
+// sumRange totals a platform's hourly aggregates in [from, to). Caller holds s.mu.
+func sumRange(s *State, p *platform, hours []int64, from, to int64) rangeStats {
+	var r rangeStats
+	for _, h := range hours {
+		if h < from || h >= to {
+			continue
+		}
+		a := s.Hours[hourKey(p.Key, h)]
+		if a == nil {
+			continue
+		}
+		r.Volume += a.VolUSD
+		r.Fees += a.CreatorUSD + a.HolderUSD + a.PlatformUSD
+		r.Protocol += a.PlatformUSD + a.LaunchFees
+		r.Creators += a.CreatorUSD
+		r.Trades += a.Swaps
+		r.Launches += a.Launches
+		r.Graduations += a.Graduations
+	}
+	return r
+}
+
+// todayStats sums since UTC midnight and compares with the same hours of
+// yesterday so the ticker colours compare like with like.
+func todayStats(s *State, p *platform, hours []int64, now time.Time) rangeStats {
+	nowU := now.Unix()
+	midnight := now.Truncate(24 * time.Hour).Unix()
+	t := sumRange(s, p, hours, midnight, nowU+1)
+	if y := sumRange(s, p, hours, midnight-86400, nowU-86400+1); y.Volume > 0 || y.Launches > 0 {
+		t.HasDelta = true
+		t.DVolume = pctChange(t.Volume, y.Volume)
+		t.DFees = pctChange(t.Fees, y.Fees)
+		t.DLaunches = pctChange(float64(t.Launches), float64(y.Launches))
+		t.DTrades = pctChange(float64(t.Trades), float64(y.Trades))
+	}
+	return t
+}
+
+// tickerItem is one platform's today line in the sticky top ticker.
+type tickerItem struct {
+	*platform
+	Idx   int
+	Today rangeStats
 }
