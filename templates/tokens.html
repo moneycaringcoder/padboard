@@ -1,0 +1,52 @@
+{{template "head" .}}
+<main>
+<header class="page">
+  <h1>Tokens</h1>
+  <form class="filters" method="get">
+    <input type="search" name="q" value="{{.Table.Query}}" placeholder="Search symbol, name or address">
+    <div class="seg">
+      <button type="submit" name="pad" value="" {{if eq .Table.Pad ""}}class="on"{{end}}>All</button>
+      <button type="submit" name="pad" value="stockereum" {{if eq .Table.Pad "stockereum"}}class="on"{{end}}>Stockereum</button>
+      <button type="submit" name="pad" value="sender" {{if eq .Table.Pad "sender"}}class="on"{{end}}>Sender</button>
+    </div>
+    <div class="seg">
+      <button type="submit" name="sort" value="volume" {{if eq .Table.Sort "volume"}}class="on"{{end}}>Volume</button>
+      <button type="submit" name="sort" value="fdv" {{if eq .Table.Sort "fdv"}}class="on"{{end}}>FDV</button>
+      <button type="submit" name="sort" value="trades" {{if eq .Table.Sort "trades"}}class="on"{{end}}>Trades</button>
+      <button type="submit" name="sort" value="new" {{if eq .Table.Sort "new"}}class="on"{{end}}>Newest</button>
+    </div>
+    <input type="hidden" name="pad" value="{{.Table.Pad}}">
+    <input type="hidden" name="sort" value="{{.Table.Sort}}">
+  </form>
+</header>
+{{if .Empty}}
+<p class="muted">First sync is reading mainnet logs — refresh in a minute.</p>
+{{else}}
+<div class="card table">
+  <table class="coins all">
+    <thead><tr><th>#</th><th>Coin</th><th>Pad</th><th>Paired with</th><th class="r">Price</th><th class="r">FDV</th><th class="r">Volume</th><th class="r">Trades</th><th class="r">Age</th><th>Status</th></tr></thead>
+    <tbody>
+    {{range .Table.Rows}}{{$p := index $.Table.PlatformOf .Platform}}
+    <tr>
+      <td><span class="rank">{{.Rank}}</span></td>
+      <td><a class="coin" href="https://etherscan.io/token/{{.Address}}" target="_blank" rel="noopener">{{icon .Image .Symbol}}<span><b>{{.Symbol}}</b><small>{{.Name}}</small></span></a></td>
+      <td><span class="pad-tag p{{if eq .Platform "stockereum"}}1{{else}}2{{end}}"><img src="{{$p.Logo}}" alt="">{{$p.Name}}</span></td>
+      <td><span class="pair">{{icon .QuoteLogo .QuoteSymbol}}{{.QuoteSymbol}}</span></td>
+      <td class="r">{{price .PriceUSD}}</td>
+      <td class="r">{{usd .FDV}}</td>
+      <td class="r"><b>{{usd .VolUSD}}</b></td>
+      <td class="r">{{k .Swaps}}</td>
+      <td class="r muted">{{ago .Created}}</td>
+      <td class="muted">{{if .Graduated}}graduated{{else if eq .Platform "stockereum"}}open pool{{else}}bonding{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <p class="more">Showing {{.Table.Shown}} of {{num .Table.Total}} tokens{{if not .Table.All}} · <a href="?all=1&sort={{.Table.Sort}}&pad={{.Table.Pad}}&q={{.Table.Query}}">show all</a>{{end}}</p>
+</div>
+{{template "foot" .}}
+{{end}}
+</main>
+{{template "dock" .}}
+</body>
+</html>

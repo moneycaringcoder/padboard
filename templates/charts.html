@@ -1,0 +1,38 @@
+{{template "head" .}}
+<main id="main">
+<header class="page">
+  <h1>Charts</h1>
+  <div class="live"><span class="pulse"></span><span id="live-text">live · synced {{ago .SyncedAt.Unix}}</span></div>
+</header>
+{{if .Empty}}
+<p class="muted">First sync is reading mainnet logs — refresh in a minute.</p>
+{{else}}
+<p class="legend"><i class="s1"></i>Stockereum <i class="s2"></i>Sender</p>
+<div class="wall">
+  {{range .Charts}}
+  <section class="tile{{if .Wide}} wide{{end}}">
+    <header>
+      <div><h3>{{.Title}}</h3><small>{{.Sub}}</small></div>
+      <div class="totals">{{range $i, $t := .Totals}}{{if $t}}<b class="t{{inc $i}}">{{$t}}</b>{{end}}{{end}}</div>
+    </header>
+    {{.SVG}}
+  </section>
+  {{end}}
+</div>
+{{template "foot" .}}
+{{end}}
+</main>
+{{template "dock" .}}
+<script>
+// Background refresh: re-fetch this page every 60s and swap <main> in place.
+const synced = {{.SyncedAt.Unix}};
+setInterval(async () => {
+  try {
+    const html = await (await fetch(location.href, {cache: 'no-store'})).text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    document.getElementById('main').replaceWith(doc.getElementById('main'));
+  } catch {}
+}, 60000);
+</script>
+</body>
+</html>

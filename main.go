@@ -21,7 +21,7 @@ func main() {
 	}
 	port := envOr("PORT", "8080")
 	dataDir := envOr("DATA_DIR", "data")
-	interval, err := time.ParseDuration(envOr("SYNC_INTERVAL", "1h"))
+	interval, err := time.ParseDuration(envOr("SYNC_INTERVAL", "5m"))
 	if err != nil {
 		log.Fatalf("SYNC_INTERVAL: %v", err)
 	}

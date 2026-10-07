@@ -1,28 +1,11 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Analytics · padboard</title>
-<meta name="description" content="Stockereum and Sender launchpad analytics, side by side, read from Ethereum mainnet.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css">
-</head>
-<body data-range="7d">
-<aside class="rail">
-  <a class="logo" href="/" title="padboard"><span></span></a>
-  <a class="active" href="#" title="Analytics">▥</a>
-</aside>
-
+{{template "head" .}}
 <main>
 {{if .Empty}}
-<header class="page"><h1>Analytics</h1></header>
+<header class="page"><h1>Overview</h1></header>
 <p class="muted">First sync is reading mainnet logs — refresh in a minute.</p>
 {{else}}
 <header class="page">
-  <h1>Analytics</h1>
+  <h1>Overview</h1>
   <div class="seg" id="range">
     <button data-r="24h">24h</button><button data-r="7d" class="on">7d</button><button data-r="30d">30d</button><button data-r="all">All</button>
   </div>
@@ -152,9 +135,10 @@
 {{end}}
 </div>
 
-<p class="updated">Last updated at {{.SyncedAt.Format "15:04"}} UTC, {{.SyncedAt.Format "Jan 2"}} · block {{num (int .Head)}} · ETH {{usd .ETHUSD}} · <a href="/api/snapshot.json">snapshot.json</a></p>
+{{template "foot" .}}
 {{end}}
 </main>
+{{template "dock" .}}
 
 <script>
 document.getElementById('range')?.addEventListener('click', e => {

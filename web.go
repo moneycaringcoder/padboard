@@ -92,13 +92,18 @@ type column struct {
 	Quotes       int
 }
 
+// pageView is the common envelope for every page; page-specific payloads hang
+// off it so the shared head/dock/foot partials work everywhere.
 type pageView struct {
-	Columns  []column
-	Head     uint64
-	HeadTime time.Time
-	SyncedAt time.Time
-	ETHUSD   float64
-	Empty    bool
+	Title, Page string
+	Columns     []column
+	Head        uint64
+	HeadTime    time.Time
+	SyncedAt    time.Time
+	ETHUSD      float64
+	Empty       bool
+	Charts      []wallChart // charts page
+	Table       tokenTable  // tokens page
 }
 
 type dayAgg struct {
@@ -106,13 +111,20 @@ type dayAgg struct {
 	Agg Agg
 }
 
-func buildView(s *State) pageView {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+// envelope fills the shared header/footer fields. Caller holds s.mu (read).
+func envelope(s *State) pageView {
 	pv := pageView{Head: s.Head, HeadTime: time.Unix(s.HeadTime, 0).UTC(), SyncedAt: time.Unix(s.SyncedAt, 0).UTC()}
 	if q := s.Quotes[ethAddr]; q != nil {
 		pv.ETHUSD = q.USD
 	}
+	return pv
+}
+
+func buildView(s *State) pageView {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	pv := envelope(s)
+	pv.Title, pv.Page = "Overview", "overview"
 	hours := s.hours()
 	if len(hours) == 0 {
 		pv.Empty = true
@@ -167,24 +179,7 @@ func buildView(s *State) pageView {
 			col.AvgTrade = col.Week.Volume / float64(col.Week.Trades)
 		}
 
-		// Daily series.
-		var days []dayAgg
-		byDay := map[int64]int{}
-		for _, h := range hours {
-			a := s.Hours[hourKey(p.Key, h)]
-			if a == nil {
-				continue
-			}
-			d := h - h%86400
-			idx, ok := byDay[d]
-			if !ok {
-				idx = len(days)
-				byDay[d] = idx
-				days = append(days, dayAgg{T: d})
-			}
-			days[idx].Agg.add(a)
-		}
-		sort.Slice(days, func(a, b int) bool { return days[a].T < days[b].T })
+		days := dailyAggs(s, p, hours, 86400)
 		col.Days = len(days)
 		labels := make([]string, len(days))
 		for j, d := range days {
@@ -538,12 +533,17 @@ func (c *collector) routes() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		http.ServeFile(w, r, c.state.path)
 	})
-	mux.HandleFunc("/{$}", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := tmpl.ExecuteTemplate(w, "index.html", buildView(c.state)); err != nil {
-			http.Error(w, err.Error(), 500)
+	page := func(name string, build func(*http.Request) pageView) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			if err := tmpl.ExecuteTemplate(w, name, build(r)); err != nil {
+				http.Error(w, err.Error(), 500)
+			}
 		}
-	})
+	}
+	mux.HandleFunc("/{$}", page("overview.html", func(*http.Request) pageView { return buildView(c.state) }))
+	mux.HandleFunc("/charts", page("charts.html", func(*http.Request) pageView { return buildCharts(c.state) }))
+	mux.HandleFunc("/tokens", page("tokens.html", func(r *http.Request) pageView { return buildTokens(c.state, r) }))
 	return mux
 }
 

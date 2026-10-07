@@ -1,0 +1,31 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · padboard</title>
+<meta name="description" content="Stockereum and Sender launchpad analytics, side by side, read from Ethereum mainnet.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-range="7d" data-page="{{.Page}}">
+{{end}}
+
+{{define "dock"}}
+<nav class="dock">
+  <a href="/" {{if eq .Page "overview"}}class="on"{{end}}>
+    <svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>Overview</a>
+  <span class="group">
+    <a href="/charts" {{if eq .Page "charts"}}class="on"{{end}}>
+      <svg viewBox="0 0 24 24"><path d="M4 20V10"/><path d="M9 20V4"/><path d="M14 20v-8"/><path d="M19 20V7"/></svg>Charts</a>
+    <a href="/tokens" {{if eq .Page "tokens"}}class="on"{{end}}>
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>Tokens</a>
+  </span>
+</nav>
+{{end}}
+
+{{define "foot"}}
+<p class="updated">Last updated at {{.SyncedAt.Format "15:04:05"}} UTC, {{.SyncedAt.Format "Jan 2"}} · block {{num (int .Head)}} · ETH {{usd .ETHUSD}} · <a href="/api/snapshot.json">snapshot.json</a></p>
+{{end}}
