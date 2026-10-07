@@ -1,0 +1,49 @@
+{{template "head" .}}
+<main class="api">
+<header class="page">
+  <h1>API</h1>
+  <div class="live"><span class="pulse"></span>free · 60 requests / minute / IP · no keys</div>
+</header>
+<p class="lede">Everything on this site is served from one hourly-to-5-minute snapshot of Ethereum mainnet. The same numbers are available as JSON. No auth, no paid tier, CORS open. Please cache: responses only change when a sync runs (every 5 minutes), so polling faster than that returns the same bytes.</p>
+
+<div class="card doc">
+  <h3>GET <code>/api/v1/summary</code></h3>
+  <p>Both platforms: today, 24h / 7d / 30d / all-time windows (volume, fees, protocol revenue, creator fees, trades, launches, graduations) and the platform token (price, 24h change, supply, burned, FDV, market cap).</p>
+  <pre>curl -s https://{{.Host}}/api/v1/summary | jq '.platforms[] | {name, volume7d: .ranges["7d"].volumeUsd, fdv: .platformToken.fdvUsd}'</pre>
+</div>
+
+<div class="card doc">
+  <h3>GET <code>/api/v1/daily</code> <small>?interval=day|hour</small></h3>
+  <p>Time series. One row per UTC day (or hour) with a bucket per platform: <code>volUsd</code>, <code>volEth</code>, <code>swaps</code>, <code>launches</code>, <code>graduations</code>, <code>creatorUsd</code>, <code>holderUsd</code>, <code>platformUsd</code>, <code>launchFeeUsd</code>, <code>creatorPaid</code>, <code>tokenPrice</code> (platform token, last swap in the bucket), plus pricing-coverage counters <code>unpriced</code> and <code>spotPriced</code>.</p>
+  <pre>curl -s "https://{{.Host}}/api/v1/daily?interval=day" | jq '.[-1]'</pre>
+</div>
+
+<div class="card doc">
+  <h3>GET <code>/api/v1/tokens</code> <small>?pad=stockereum|sender &amp;sort=volume|fdv|trades|new &amp;q=text &amp;page=N</small></h3>
+  <p>Every launched token, 100 per page, same filters as the Tokens tab. Fields: address, platform, symbol, name, image, quote, quoteSymbol, poolId, creator, created, graduated, swaps, volumeQuote, volumeUsd, priceUsd, supply, fdvUsd.</p>
+  <pre>curl -s "https://{{.Host}}/api/v1/tokens?pad=sender&sort=new&page=1" | jq '.tokens[:3]'</pre>
+  <h3>GET <code>/api/v1/tokens/{address}</code></h3>
+  <pre>curl -s https://{{.Host}}/api/v1/tokens/0x75e2fc69ff2ac12af65ba7d321bbf4f878c535d2</pre>
+</div>
+
+<div class="card doc">
+  <h3>GET <code>/api/snapshot.json</code></h3>
+  <p>The raw snapshot the server runs on: every token, pool id → token map, quote assets with prices and logos, hourly ETH/USD series, and the per-platform hourly aggregates keyed <code>"&lt;platform&gt;/&lt;hour unix&gt;"</code>. A few MB; use it if you want to roll your own windows.</p>
+  <pre>curl -s https://{{.Host}}/api/snapshot.json | jq '{head, tokens: (.tokens|length), hours: (.hours|length)}'</pre>
+</div>
+
+<div class="card doc">
+  <h3>Limits &amp; semantics</h3>
+  <ul>
+    <li><b>60 requests per minute per IP</b>, fixed window. Headers: <code>X-RateLimit-Limit</code>, <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Reset</code>; over the limit you get <code>429</code> with <code>Retry-After</code>.</li>
+    <li>Volume is the quote-side delta of every Uniswap v4 <code>Swap</code> on a launched pool. ETH/WETH quotes are priced hourly; other quotes at snapshot spot (<code>spotPriced</code> counts them); quotes with no feed add $0 (<code>unpriced</code>).</li>
+    <li>Fees are what the contracts credited or collected — Stockereum <code>FeeEscrow.Credited</code>, Sender locker <code>FeesCollected</code> / hook <code>FeeDistributed</code> — not volume × rate. <code>creatorPaid</code> is what actually left to creators.</li>
+    <li>Token prices come from the pool's <code>sqrtPriceX96</code> after the last swap; FDV = price × <code>totalSupply()</code>. Thin pools print thin marks.</li>
+    <li>Data is 12 confirmations behind the tip and refreshed every 5 minutes. Not audited; no warranty. Attribution appreciated.</li>
+  </ul>
+</div>
+{{template "foot" .}}
+</main>
+{{template "dock" .}}
+</body>
+</html>

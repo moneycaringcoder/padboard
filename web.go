@@ -18,6 +18,8 @@ var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 	"usd": fmtUSD, "num": fmtNum, "k": fmtKAny, "pct": fmtPct, "pct2": fmtPct2, "ago": fmtAgo, "eth": fmtETH,
 	"short": shortAddr, "delta": fmtDelta, "price": fmtPrice, "ratio": fmtRatio, "lower": strings.ToLower,
 	"inc":  func(i int) int { return i + 1 },
+	"add":  func(a, b int) int { return a + b },
+	"sub":  func(a, b int) int { return a - b },
 	"icon": iconHTML,
 	"int":  func(v uint64) int { return int(v) },
 }).ParseFS(assets, "templates/*.html"))
@@ -104,6 +106,7 @@ type pageView struct {
 	Empty       bool
 	Charts      []wallChart // charts page
 	Table       tokenTable  // tokens page
+	Host        string      // api page
 }
 
 type dayAgg struct {
@@ -377,7 +380,7 @@ func bars(vals []float64, labels []string, fy func(float64) string, series int) 
 		if j == n-1 {
 			cls = fmt.Sprintf("bar last s%d", series)
 		}
-		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" class="%s"><title>%s: %s</title></rect>`, float64(j)*group+(group-bw)/2, padT+plotH-bh, bw, bh, math.Min(4, bw/2), cls, labels[j], fy(v))
+		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" class="%s" data-tip="%s: %s"/>`, float64(j)*group+(group-bw)/2, padT+plotH-bh, bw, bh, math.Min(4, bw/2), cls, labels[j], fy(v))
 	}
 	for _, j := range []int{0, n / 2, n - 1} {
 		anchor := "start"
@@ -529,10 +532,18 @@ func (c *collector) routes() http.Handler {
 		c.state.mu.RUnlock()
 		fmt.Fprintf(w, "ok head=%d\n", head)
 	})
-	mux.HandleFunc("/api/snapshot.json", func(w http.ResponseWriter, r *http.Request) {
+	api := http.NewServeMux()
+	api.HandleFunc("/api/snapshot.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		http.ServeFile(w, r, c.state.path)
 	})
+	api.HandleFunc("/api/v1/summary", c.apiSummary)
+	api.HandleFunc("/api/v1/daily", c.apiDaily)
+	api.HandleFunc("/api/v1/tokens", c.apiTokens)
+	api.HandleFunc("/api/v1/tokens/{address}", c.apiToken)
+	mux.Handle("/api/", newRateLimit().wrap(api))
+
 	page := func(name string, build func(*http.Request) pageView) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -544,6 +555,14 @@ func (c *collector) routes() http.Handler {
 	mux.HandleFunc("/{$}", page("overview.html", func(*http.Request) pageView { return buildView(c.state) }))
 	mux.HandleFunc("/charts", page("charts.html", func(*http.Request) pageView { return buildCharts(c.state) }))
 	mux.HandleFunc("/tokens", page("tokens.html", func(r *http.Request) pageView { return buildTokens(c.state, r) }))
+	mux.HandleFunc("/api", page("api.html", func(r *http.Request) pageView {
+		c.state.mu.RLock()
+		defer c.state.mu.RUnlock()
+		pv := envelope(c.state)
+		pv.Title, pv.Page = "API", "api"
+		pv.Host = r.Host
+		return pv
+	}))
 	return mux
 }
 

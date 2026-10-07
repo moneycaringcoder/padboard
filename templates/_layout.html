@@ -22,10 +22,30 @@
       <svg viewBox="0 0 24 24"><path d="M4 20V10"/><path d="M9 20V4"/><path d="M14 20v-8"/><path d="M19 20V7"/></svg>Charts</a>
     <a href="/tokens" {{if eq .Page "tokens"}}class="on"{{end}}>
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>Tokens</a>
+    <a href="/api" {{if eq .Page "api"}}class="on"{{end}}>
+      <svg viewBox="0 0 24 24"><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/><path d="m14 4-4 16"/></svg>API</a>
   </span>
 </nav>
+<div class="tip" id="tip" hidden></div>
+<script>
+(() => {
+  const tip = document.getElementById('tip');
+  let cur = null;
+  document.addEventListener('mousemove', e => {
+    const el = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (el !== cur) {
+      cur = el;
+      for (const h of document.querySelectorAll('.hot')) h.classList.remove('hot');
+      if (el) { el.classList.add('hot'); tip.textContent = el.dataset.tip; tip.hidden = false; } else tip.hidden = true;
+    }
+    if (el) {
+      const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+      tip.style.transform = `translate(${x}px, ${e.clientY - tip.offsetHeight - 12}px)`;
+    }
+  });
+})();
+</script>
 {{end}}
-
 {{define "foot"}}
 <p class="updated">Last updated at {{.SyncedAt.Format "15:04:05"}} UTC, {{.SyncedAt.Format "Jan 2"}} · block {{num (int .Head)}} · ETH {{usd .ETHUSD}} · <a href="/api/snapshot.json">snapshot.json</a></p>
 {{end}}

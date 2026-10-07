@@ -37,6 +37,7 @@ func dailyAggs(s *State, p *platform, hours []int64, bucket int64) []dayAgg {
 
 type wallChart struct {
 	Title, Sub string
+	Icon       string   // optional image for the title
 	Totals     []string // one per platform, same order as `platforms`
 	SVG        template.HTML
 	Wide       bool
@@ -47,6 +48,13 @@ func buildCharts(s *State) pageView {
 	defer s.mu.RUnlock()
 	pv := envelope(s)
 	pv.Title, pv.Page = "Charts", "charts"
+	tokenImg := make([]string, len(platforms))
+	for i, p := range platforms {
+		pv.Columns = append(pv.Columns, column{platform: p, Idx: i + 1})
+		if t := s.Tokens[p.Token]; t != nil && t.Image != "-" {
+			tokenImg[i] = t.Image
+		}
+	}
 	hours := s.hours()
 	if len(hours) == 0 {
 		pv.Empty = true
@@ -178,8 +186,8 @@ func buildCharts(s *State) pageView {
 		{Title: "Launch dominance", Sub: "share of daily launches", Totals: shareTotals(lau), SVG: band(lau[0], lau[1], days.labels, n)},
 		{Title: "Platform token FDV", Sub: "$" + platforms[0].TokenSymbol + " vs $" + platforms[1].TokenSymbol, Totals: lastEach(fdv, fmtUSD), SVG: dualLines(fdv, days.labels, fmtUSD, n)},
 		{Title: "FDV ÷ 7d fees", Sub: "valuation per dollar of weekly fees", Totals: lastEach(ratio, fmtRatio), SVG: dualLines(ratio, days.labels, fmtRatio, n)},
-		{Title: "$" + platforms[0].TokenSymbol + " price", Sub: "daily last swap", Totals: []string{lastEach(prices, fmtPrice)[0], ""}, SVG: dualLines([][]float64{prices[0], nil}, days.labels, fmtPrice, n)},
-		{Title: "$" + platforms[1].TokenSymbol + " price", Sub: "daily last swap", Totals: []string{"", lastEach(prices, fmtPrice)[1]}, SVG: dualLines([][]float64{nil, prices[1]}, days.labels, fmtPrice, n)},
+		{Title: "$" + platforms[0].TokenSymbol + " price", Sub: "daily last swap", Icon: tokenImg[0], Totals: []string{lastEach(prices, fmtPrice)[0], ""}, SVG: dualLines([][]float64{prices[0], nil}, days.labels, fmtPrice, n)},
+		{Title: "$" + platforms[1].TokenSymbol + " price", Sub: "daily last swap", Icon: tokenImg[1], Totals: []string{"", lastEach(prices, fmtPrice)[1]}, SVG: dualLines([][]float64{nil, prices[1]}, days.labels, fmtPrice, n)},
 	}
 	return pv
 }
@@ -272,7 +280,7 @@ func dualBars(series [][]float64, labels []string, fy func(float64) string, ow f
 			}
 			bh := plotH * s[j] / maxV
 			x := float64(j)*group + group*0.1 + bw*float64(i)
-			fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" class="bar s%d"><title>%s · %s: %s</title></rect>`, x, oPadT+plotH-bh, bw, bh, math.Min(2, bw/2), i+1, labels[j], platforms[i].Name, fy(s[j]))
+			fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" class="bar s%d" data-tip="%s · %s: %s"/>`, x, oPadT+plotH-bh, bw, bh, math.Min(2, bw/2), i+1, labels[j], platforms[i].Name, fy(s[j]))
 		}
 	}
 	overlayXLabels(&b, labels, func(j int) float64 { return float64(j)*group + group/2 })
@@ -314,7 +322,7 @@ func dualLines(series [][]float64, labels []string, fy func(float64) string, ow 
 		fmt.Fprintf(&b, `<path d="%s" class="line s%d"/>`, path.String(), i+1)
 		for j, v := range s {
 			if v != 0 {
-				fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="5" class="pt s%d"><title>%s · %s: %s</title></circle>`, xAt(j), yAt(v), i+1, labels[j], platforms[i].Name, fy(v))
+				fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="5" class="pt s%d" data-tip="%s · %s: %s"/>`, xAt(j), yAt(v), i+1, labels[j], platforms[i].Name, fy(v))
 			}
 		}
 	}
@@ -341,8 +349,8 @@ func band(a, c []float64, labels []string, ow float64) template.HTML {
 		}
 		sa := a[j] / tot
 		x := float64(j)*group + group*0.1
-		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s1"><title>%s · %s %.0f%%</title></rect>`, x, oPadT+plotH*(1-sa), w, plotH*sa, labels[j], platforms[0].Name, sa*100)
-		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s2"><title>%s · %s %.0f%%</title></rect>`, x, oPadT, w, plotH*(1-sa), labels[j], platforms[1].Name, (1-sa)*100)
+		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s1" data-tip="%s · %s %.0f%%"/>`, x, oPadT+plotH*(1-sa), w, plotH*sa, labels[j], platforms[0].Name, sa*100)
+		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar s2" data-tip="%s · %s %.0f%%"/>`, x, oPadT, w, plotH*(1-sa), labels[j], platforms[1].Name, (1-sa)*100)
 	}
 	for _, f := range []float64{0.25, 0.5, 0.75} {
 		y := oPadT + plotH*(1-f)
@@ -355,13 +363,15 @@ func band(a, c []float64, labels []string, ow float64) template.HTML {
 
 // ---- Tokens page ----
 
+const tokensPerPage = 100
+
 type tokenTable struct {
 	Rows       []tokenRow
 	Sort, Pad  string
 	Query      string
 	Total      int
-	Shown      int
-	All        bool
+	Page, Last int
+	Pages      []int // page numbers to render
 	PlatformOf map[string]*platform
 }
 
@@ -379,16 +389,20 @@ var tokenSorts = map[string]func(a, b *tokenRow) bool{
 	"new":    func(a, b *tokenRow) bool { return a.Created > b.Created },
 }
 
-func buildTokens(s *State, r *http.Request) pageView {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	pv := envelope(s)
-	pv.Title, pv.Page = "Tokens", "tokens"
-	q := r.URL.Query()
-	t := tokenTable{Sort: q.Get("sort"), Pad: q.Get("pad"), Query: strings.TrimSpace(q.Get("q")), All: q.Get("all") == "1", PlatformOf: map[string]*platform{}}
+// queryTokens filters, sorts and pages tokens from URL parameters
+// (pad, q, sort, page). Caller holds s.mu (read).
+func queryTokens(s *State, q map[string][]string) tokenTable {
+	get := func(k string) string {
+		if v := q[k]; len(v) > 0 {
+			return v[0]
+		}
+		return ""
+	}
+	t := tokenTable{Sort: get("sort"), Pad: get("pad"), Query: strings.TrimSpace(get("q")), Page: 1, PlatformOf: map[string]*platform{}}
 	if tokenSorts[t.Sort] == nil {
 		t.Sort = "volume"
 	}
+	fmt.Sscan(get("page"), &t.Page)
 	for _, p := range platforms {
 		t.PlatformOf[p.Key] = p
 	}
@@ -409,13 +423,27 @@ func buildTokens(s *State, r *http.Request) pageView {
 	less := tokenSorts[t.Sort]
 	sort.Slice(t.Rows, func(i, j int) bool { return less(&t.Rows[i], &t.Rows[j]) })
 	t.Total = len(t.Rows)
-	if !t.All && len(t.Rows) > 150 {
-		t.Rows = t.Rows[:150]
-	}
-	t.Shown = len(t.Rows)
+	t.Last = max(1, (t.Total+tokensPerPage-1)/tokensPerPage)
+	t.Page = min(max(1, t.Page), t.Last)
+	start := (t.Page - 1) * tokensPerPage
+	t.Rows = t.Rows[start:min(start+tokensPerPage, t.Total)]
 	for i := range t.Rows {
-		t.Rows[i].Rank = i + 1
+		t.Rows[i].Rank = start + i + 1
 	}
-	pv.Table = t
+	for p := max(1, t.Page-3); p <= min(t.Last, t.Page+3); p++ {
+		t.Pages = append(t.Pages, p)
+	}
+	return t
+}
+
+func buildTokens(s *State, r *http.Request) pageView {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	pv := envelope(s)
+	pv.Title, pv.Page = "Tokens", "tokens"
+	pv.Table = queryTokens(s, r.URL.Query())
+	for i, p := range platforms {
+		pv.Columns = append(pv.Columns, column{platform: p, Idx: i + 1})
+	}
 	return pv
 }

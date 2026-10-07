@@ -6,8 +6,7 @@
     <input type="search" name="q" value="{{.Table.Query}}" placeholder="Search symbol, name or address">
     <div class="seg">
       <button type="submit" name="pad" value="" {{if eq .Table.Pad ""}}class="on"{{end}}>All</button>
-      <button type="submit" name="pad" value="stockereum" {{if eq .Table.Pad "stockereum"}}class="on"{{end}}>Stockereum</button>
-      <button type="submit" name="pad" value="sender" {{if eq .Table.Pad "sender"}}class="on"{{end}}>Sender</button>
+      {{range .Columns}}<button type="submit" name="pad" value="{{.Key}}" {{if eq $.Table.Pad .Key}}class="on"{{end}}><img src="{{.Logo}}" alt="">{{.Name}}</button>{{end}}
     </div>
     <div class="seg">
       <button type="submit" name="sort" value="volume" {{if eq .Table.Sort "volume"}}class="on"{{end}}>Volume</button>
@@ -24,25 +23,35 @@
 {{else}}
 <div class="card table">
   <table class="coins all">
-    <thead><tr><th>#</th><th>Coin</th><th>Pad</th><th>Paired with</th><th class="r">Price</th><th class="r">FDV</th><th class="r">Volume</th><th class="r">Trades</th><th class="r">Age</th><th>Status</th></tr></thead>
+    <thead><tr><th>#</th><th>Coin</th><th>Pad</th><th>Paired with</th><th class="r">Price</th><th class="r">FDV</th><th class="r">Volume</th><th class="r">Trades</th><th class="r">Age</th><th class="r">Status</th></tr></thead>
     <tbody>
     {{range .Table.Rows}}{{$p := index $.Table.PlatformOf .Platform}}
     <tr>
-      <td><span class="rank">{{.Rank}}</span></td>
+      <td class="rk">{{.Rank}}</td>
       <td><a class="coin" href="https://etherscan.io/token/{{.Address}}" target="_blank" rel="noopener">{{icon .Image .Symbol}}<span><b>{{.Symbol}}</b><small>{{.Name}}</small></span></a></td>
       <td><span class="pad-tag p{{if eq .Platform "stockereum"}}1{{else}}2{{end}}"><img src="{{$p.Logo}}" alt="">{{$p.Name}}</span></td>
       <td><span class="pair">{{icon .QuoteLogo .QuoteSymbol}}{{.QuoteSymbol}}</span></td>
-      <td class="r">{{price .PriceUSD}}</td>
-      <td class="r">{{usd .FDV}}</td>
-      <td class="r"><b>{{usd .VolUSD}}</b></td>
-      <td class="r">{{k .Swaps}}</td>
+      <td class="r num">{{price .PriceUSD}}</td>
+      <td class="r num">{{usd .FDV}}</td>
+      <td class="r num"><b>{{usd .VolUSD}}</b></td>
+      <td class="r num muted">{{k .Swaps}}</td>
       <td class="r muted">{{ago .Created}}</td>
-      <td class="muted">{{if .Graduated}}graduated{{else if eq .Platform "stockereum"}}open pool{{else}}bonding{{end}}</td>
+      <td class="r">{{if .Graduated}}<span class="st grad">graduated</span>{{else if eq .Platform "stockereum"}}<span class="st">open pool</span>{{else}}<span class="st bond">bonding</span>{{end}}</td>
     </tr>
     {{end}}
     </tbody>
   </table>
-  <p class="more">Showing {{.Table.Shown}} of {{num .Table.Total}} tokens{{if not .Table.All}} · <a href="?all=1&sort={{.Table.Sort}}&pad={{.Table.Pad}}&q={{.Table.Query}}">show all</a>{{end}}</p>
+  {{with .Table}}
+  <nav class="pager">
+    <span class="muted">{{num .Total}} tokens · page {{.Page}} of {{.Last}}</span>
+    <span class="pages">
+      {{$q := printf "sort=%s&pad=%s&q=%s" .Sort .Pad .Query}}
+      {{if gt .Page 1}}<a href="?{{$q}}&page={{sub .Page 1}}">‹</a>{{end}}
+      {{range .Pages}}<a href="?{{$q}}&page={{.}}" {{if eq . $.Table.Page}}class="on"{{end}}>{{.}}</a>{{end}}
+      {{if lt .Page .Last}}<a href="?{{$q}}&page={{add .Page 1}}">›</a>{{end}}
+    </span>
+  </nav>
+  {{end}}
 </div>
 {{template "foot" .}}
 {{end}}

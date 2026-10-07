@@ -70,12 +70,12 @@
       <tbody>
       {{range .TopCoins}}
       <tr>
-        <td><span class="rank">{{.Rank}}</span></td>
+        <td class="rk">{{.Rank}}</td>
         <td><a class="coin" href="https://etherscan.io/token/{{.Address}}" target="_blank" rel="noopener">{{icon .Image .Symbol}}<span><b>{{.Symbol}}</b><small>{{.Name}}</small></span></a></td>
         <td><span class="pair">{{icon .QuoteLogo .QuoteSymbol}}{{.QuoteSymbol}}</span></td>
-        <td class="r">{{usd .VolUSD}}</td>
-        <td class="r muted">{{usd .FDV}}</td>
-        <td class="r">{{k .Swaps}}</td>
+        <td class="r num"><b>{{usd .VolUSD}}</b></td>
+        <td class="r num muted">{{usd .FDV}}</td>
+        <td class="r num muted">{{k .Swaps}}</td>
       </tr>
       {{end}}
       </tbody>
