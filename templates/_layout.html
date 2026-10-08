@@ -73,6 +73,7 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
     <a href="/api" {{if eq .Page "api"}}class="on"{{end}}>
       <svg viewBox="0 0 24 24"><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/><path d="m14 4-4 16"/></svg>API</a>
   </span>
+  {{if .ETHUSD}}<span class="ethpill" id="ethpill" data-tip="ETH/USD, refreshed every sync"><img src="/static/eth.svg" alt=""><b>{{ethprice .ETHUSD}}</b></span>{{end}}
 </nav>
 <div class="tip" id="tip" hidden></div>
 <script>

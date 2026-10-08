@@ -227,7 +227,7 @@ document.addEventListener('click', e => {
 // Live: re-fetch every minute while the tab is visible and swap the ticker and
 // <main> in place, keeping chart tabs and picks; unchanged pages (same ETag)
 // are skipped. Hidden tabs catch up as soon as they are shown.
-const NUMS = '.big b, .lb .num > b, .chart-total b, .clegend b, .dn figcaption b, .trio b, .ptok .num > b, .tk em';
+const NUMS = '.big b, .lb .num > b, .chart-total b, .clegend b, .dn figcaption b, .trio b, .ptok .num > b, .tk em, .ethpill b';
 const value = s => {
   const m = s.replace(/[$,+%×]/g, '').match(/-?[\d.]+/);
   return m ? parseFloat(m[0]) * ({K: 1e3, M: 1e6, B: 1e9}[(s.match(/[KMB]/) || [''])[0]] || 1) : NaN;
@@ -267,6 +267,8 @@ const refresh = async () => {
     main.style.animation = 'none';
     document.getElementById('main').replaceWith(main);
     if (tk && old) { calm(tk); old.replaceWith(tk); }
+    const ep = doc.getElementById('ethpill'), oldEp = document.getElementById('ethpill');
+    if (ep && oldEp) { tint(oldEp, ep); oldEp.replaceWith(ep); }
     syncPressed();
     etag = tag;
   } catch {}

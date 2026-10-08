@@ -36,16 +36,26 @@ small { display: block; color: var(--muted); font-size: 12.5px; font-weight: 600
 .up { color: var(--up); } .down { color: var(--down); }
 
 /* floating bottom dock */
-.dock { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 20; display: flex; gap: 12px; align-items: stretch; filter: drop-shadow(0 12px 30px rgba(0,0,0,.6)); }
-.dock a, .dock .group { display: flex; align-items: center; gap: 10px; border-radius: 16px; background: rgba(21,23,28,.92); backdrop-filter: blur(14px); border: 1px solid var(--line); color: var(--muted); font-weight: 700; font-size: 15px; }
+.dock { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 20; display: flex; gap: 12px; align-items: stretch; }
+/* Shadow per button, not filter: drop-shadow on .dock: a filter on the parent
+   turns off the children's backdrop blur, letting page text show through. */
+.dock a, .dock .group { display: flex; align-items: center; gap: 10px; border-radius: 16px; background: rgba(21,23,28,.92); backdrop-filter: blur(14px); border: 1px solid var(--line); color: var(--muted); font-weight: 700; font-size: 15px; box-shadow: 0 12px 30px rgba(0,0,0,.55); }
 .dock a { padding: 14px 22px; }
-.dock .group { padding: 0; gap: 0; }
-.dock .group a { border: 0; background: transparent; border-radius: 0; }
+.dock .group { padding: 0; gap: 0; overflow: hidden; }
+/* Inside the group only the group paints: the buttons' own (square) blur and
+   background would show as grey corners above its rounded border. */
+.dock .group a { border: 0; background: transparent; border-radius: 0; backdrop-filter: none; box-shadow: none; }
 .dock .group a + a { border-left: 1px solid var(--line); }
 .dock a:hover { color: var(--fg); }
 .dock a.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 .dock .group a.on { background: var(--card-2); color: var(--fg); }
 .dock svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* ETH price: same size and shape as the dock buttons, tinted glass in ETH blue */
+.ethpill { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 22px; border-radius: 16px; color: #fff; font-size: 15px; font-weight: 800; cursor: default;
+  background: linear-gradient(180deg, #6179d8, #4b60bb);
+  border: 1px solid rgba(178, 192, 255, .32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 0 18px rgba(255, 255, 255, .06), 0 12px 30px rgba(0, 0, 0, .55); }
+.ethpill img { width: 18px; height: 18px; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .35); }
 
 main { margin: 0 auto; padding: 26px 32px 120px; max-width: 1500px; }
 .page { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
@@ -281,6 +291,7 @@ th a.on::after { content: " ↓"; color: var(--up); }
   .dock a { padding: 11px 12px; font-size: 0; gap: 0; }
   .dock a svg { width: 20px; height: 20px; }
   .dock a.on { font-size: 13px; gap: 8px; }
+  .ethpill { padding: 11px 14px; font-size: 13px; gap: 8px; }
   .card { border-radius: 16px; padding: 14px; }
   .kpis4 { grid-template-columns: 1fr 1fr; }
   .months th:nth-child(n+5), .months td:nth-child(n+5) { display: none; }

@@ -22,10 +22,11 @@ var assets embed.FS
 var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 	"usd": fmtUSD, "num": fmtNum, "k": fmtKAny, "pct": fmtPct, "pct2": fmtPct2, "ago": fmtAgo,
 	"delta": fmtDelta, "price": fmtPrice,
-	"inc":  func(i int) int { return i + 1 },
-	"add":  func(a, b int) int { return a + b },
-	"sub":  func(a, b int) int { return a - b },
-	"icon": iconHTML,
+	"ethprice": func(v float64) string { return "$" + fmtNum(int(math.Round(v))) },
+	"inc":      func(i int) int { return i + 1 },
+	"add":      func(a, b int) int { return a + b },
+	"sub":      func(a, b int) int { return a - b },
+	"icon":     iconHTML,
 	"trend": func(p float64) string {
 		switch {
 		case p > 0:
@@ -125,23 +126,17 @@ func fmtAgo(ts int64) string {
 	}
 }
 
-// fmtDelta renders a signed change: percent up to +200%, then as a multiple
-// ("4.2×", "12×"), so tiny prior windows don't print a capped "+999%".
+// fmtDelta renders a signed percentage change, uncapped, with thousands
+// separators for big jumps ("+18,300%").
 func fmtDelta(p float64) template.HTML {
 	if p == 0 || math.IsInf(p, 0) || math.IsNaN(p) {
 		return ""
 	}
+	cls, sign := "up", "+"
 	if p < 0 {
-		return template.HTML(fmt.Sprintf(`<span class="down">%.0f%%</span>`, p))
+		cls, sign = "down", "-"
 	}
-	if x := 1 + p/100; x >= 3 {
-		f := "%.1f×"
-		if x >= 10 {
-			f = "%.0f×"
-		}
-		return template.HTML(`<span class="up">` + fmt.Sprintf(f, x) + `</span>`)
-	}
-	return template.HTML(fmt.Sprintf(`<span class="up">+%.0f%%</span>`, p))
+	return template.HTML(fmt.Sprintf(`<span class="%s">%s%s%%</span>`, cls, sign, fmtNum(int(math.Round(math.Abs(p))))))
 }
 
 func pctChange(cur, prev float64) float64 {
