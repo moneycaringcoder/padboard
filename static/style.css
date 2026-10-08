@@ -77,12 +77,14 @@ main { margin: 0 auto; padding: 26px 32px calc(var(--dock-h) + var(--dock-off) +
 .seg button.on { background: var(--fg); color: var(--bg); }
 .seg button:hover:not(.on) { color: var(--fg); }
 
-/* every launchpad at a glance: 2×2, no card chrome, floating above the leaderboard */
+/* every launchpad at a glance: 2×2, no card chrome, floating above the leaderboard.
+   Each pad is a container: numbers scale with its width, then the four metrics
+   fold to 2×2 inside the pad; the quad only goes single-column on phones. */
 .quad { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap) 48px; margin: 4px 0 var(--gap); }
-.padk { padding: 0 4px; scroll-margin-top: 130px; }
+.padk { padding: 0 4px; scroll-margin-top: 130px; container-type: inline-size; min-width: 0; }
 .padk .big { margin-top: 12px; }
 .pad-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px; }
-.pad-head h2 { font-size: 22px; }
+.pad-head h2 { font-size: clamp(17px, 4cqw, 22px); }
 .pad-head a { color: var(--muted); font-size: 13px; font-weight: 600; }
 .pad-head a:hover { color: var(--fg); }
 .pad-head .more-link { margin-left: auto; }
@@ -107,9 +109,14 @@ main { margin: 0 auto; padding: 26px 32px calc(var(--dock-h) + var(--dock-off) +
 .big { display: none; grid-template-columns: repeat(4, 1fr); gap: 0; padding: 4px 0 6px; }
 .big > div { padding: 2px 14px; border-left: 1px solid var(--line); }
 .big > div:first-child { border-left: 0; padding-left: 4px; }
-.big b { display: block; font-size: 30px; letter-spacing: -0.03em; line-height: 1.15; }
+.big b { display: block; font-size: clamp(18px, 4.6cqw, 30px); letter-spacing: -0.03em; line-height: 1.15; }
+.big small { white-space: nowrap; }
 .big small span { margin-left: 6px; }
 body[data-range="24h"] .r-24h, body[data-range="7d"] .r-7d, body[data-range="30d"] .r-30d, body[data-range="all"] .r-all { display: grid; }
+@container (max-width: 500px) {
+  .big { grid-template-columns: 1fr 1fr; gap: 10px 0; }
+  .big > div:nth-child(3) { border-left: 0; padding-left: 4px; }
+}
 
 /* cards */
 .card { background: var(--card); border-radius: 22px; padding: 18px 20px; box-shadow: var(--shadow); }
@@ -180,8 +187,6 @@ tr:last-child td { border-bottom: 0; }
   .ticker::-webkit-scrollbar { display: none; }
   .tk-label { position: sticky; left: 0; z-index: 1; background: var(--card); padding: 6px 12px 6px 16px; flex: none; }
   .tk { flex: none; width: 320px; padding: 8px 14px; gap: 10px; }
-  .big { grid-template-columns: 1fr 1fr; gap: 10px; }
-  .big > div, .big > div:first-child { border-left: 0; padding: 0; }
 }
 
 /* icons */
@@ -279,9 +284,6 @@ th a.on::after { content: " ↓"; color: var(--up); }
 
 /* responsive */
 @media (max-width: 900px) {
-  .today { grid-template-columns: repeat(3, 1fr); gap: 10px 0; }
-  .today > div:first-child { grid-column: span 3; border-left: 0; padding-left: 4px; }
-  .big { grid-template-columns: 1fr 1fr; gap: 10px 0; }
   .trio b { font-size: 20px; }
   .seglegend { grid-template-columns: 1fr; }
   .filters input[type=search] { width: 100%; }
@@ -296,7 +298,6 @@ th a.on::after { content: " ↓"; color: var(--up); }
   .dock a.on { font-size: 13px; gap: 8px; }
   .ethpill { padding: 11px 14px; font-size: 13px; gap: 8px; }
   .card { border-radius: 16px; padding: 14px; }
-  .kpis4 { grid-template-columns: 1fr 1fr; }
   .months th:nth-child(n+5), .months td:nth-child(n+5) { display: none; }
 }
 
@@ -428,7 +429,8 @@ body[data-range="24h"] .lb.r-24h, body[data-range="7d"] .lb.r-7d, body[data-rang
 .ph { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .ph h3 { margin: 0; }
 .cap.first { margin-top: 0; }
-@media (max-width: 1100px) { .quad, .duo { grid-template-columns: 1fr; } } /* after .duo, or it loses */
+@media (max-width: 1100px) { .duo { grid-template-columns: 1fr; } } /* after .duo, or it loses */
+@media (max-width: 640px) { .quad { grid-template-columns: 1fr; } }
 .pick { display: flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--card-2); flex: none; }
 .pick button { border: 0; background: none; padding: 0; cursor: pointer; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; opacity: .62; transition: opacity .15s, box-shadow .15s; }
 .pick button:hover { opacity: 1; }
