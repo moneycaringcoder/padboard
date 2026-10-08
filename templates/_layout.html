@@ -31,7 +31,7 @@
   <div class="tk-label">Today</div>
   {{range .Ticker}}
   <a class="tk p{{.Idx}}" href="/?a={{.Key}}#cmp" title="{{.Name}} today: {{usd .Today.Volume}} volume · {{k .Today.Trades}} trades · {{k .Today.Launches}} launches · {{usd .Today.Fees}} fees">
-    <img src="{{.Logo}}" alt=""><b class="nm">{{.Name}}</b>
+    <span class="tn"><img src="{{.Logo}}" alt=""><b class="nm">{{.Name}}</b></span>
     <span><em class="{{trend .Today.DVolume}}">{{usd .Today.Volume}}</em> vol</span>
     <span class="tl"><em class="{{trend .Today.DLaunches}}">{{k .Today.Launches}}</em> launches</span>
     <span class="tf"><em class="{{trend .Today.DFees}}">{{usd .Today.Fees}}</em> fees</span>
