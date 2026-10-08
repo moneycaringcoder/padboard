@@ -89,9 +89,16 @@ type column struct {
 	HasHolders   bool // month-table columns worth showing
 	HasPartners  bool
 	HasLaunchFee bool
-	Milestones   []string
+	Milestones   []milestone
+	LaunchStrip  template.HTML // launches per day, last 30 days
 	UnpricedPct  float64
 	SpotPct      float64
+}
+
+// milestone: cumulative volume first reached Mark after Days days of activity.
+type milestone struct {
+	Days int
+	Mark string
 }
 
 // boardRow is one platform in the leaderboard for one window.
@@ -531,10 +538,18 @@ func buildColumn(s *State, p *platform, hs []hourAgg, now time.Time, detail bool
 	for j, d := range days {
 		cum += d.Agg.VolUSD
 		for mi < len(marks) && cum >= marks[mi] {
-			col.Milestones = append(col.Milestones, fmt.Sprintf("%d days to %s", j+1, fmtUSD(marks[mi])))
+			col.Milestones = append(col.Milestones, milestone{j + 1, trimZero(fmtUSD(marks[mi]))})
 			mi++
 		}
 	}
+	today := nowU - nowU%86400
+	launches := make([]float64, 30)
+	for _, d := range days {
+		if j := 29 - int((today-d.T)/86400); j >= 0 && j < 30 {
+			launches[j] = float64(d.Agg.Launches)
+		}
+	}
+	col.LaunchStrip = spark(launches)
 
 	// Months, newest first, and the all-time fee routing.
 	var all Agg
@@ -621,9 +636,8 @@ func stacked(series [][]float64, pads []*platform, labels []string, fy func(floa
 		}
 		maxV = math.Max(maxV, t)
 	}
-	if maxV == 0 {
-		maxV = 1
-	}
+	step := niceStep(maxV / 3)
+	maxV = 3 * step // the top gridline is a round number, never below the tallest bar
 	meta := chartMeta{Mode: "bars", X0: 0, W: w - padR, Labels: labels}
 	for i, p := range pads {
 		meta.Series = append(meta.Series, chartSeries{Name: p.Name, Logo: p.Logo, Values: formatSeries(series[i], fy)})
@@ -632,9 +646,13 @@ func stacked(series [][]float64, pads []*platform, labels []string, fy func(floa
 	d := newDither()
 	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars" role="img" %s>%s`, w, h, chartAttr(meta), d.defs(pads))
 	plotW, plotH := w-padR, h-padT-padB
-	for _, f := range []float64{1.0 / 3, 2.0 / 3, 1} {
-		y := padT + plotH*(1-f)
-		fmt.Fprintf(&b, `<line x1="0" y1="%.1f" x2="%g" y2="%.1f" class="grid"/><text x="%g" y="%.1f" class="tick" text-anchor="end">%s</text>`, y, plotW, y, w, y+4, fy(maxV*f))
+	// Right-hand ticks for wide screens; the inside-left set (drawn over the
+	// bars, below) replaces them on phones where the right gutter is tiny.
+	var left strings.Builder
+	for k := 1; k <= 3; k++ {
+		y, v := padT+plotH*(1-float64(k)/3), trimZero(fy(step*float64(k)))
+		fmt.Fprintf(&b, `<line x1="0" y1="%.1f" x2="%g" y2="%.1f" class="grid"/><text x="%g" y="%.1f" class="tick yr" text-anchor="end">%s</text>`, y, plotW, y, w, y+4, v)
+		fmt.Fprintf(&left, `<text x="4" y="%.1f" class="tick yl">%s</text>`, y-6, v)
 	}
 	group := plotW / float64(n)
 	bw := math.Max(1, group*0.7)
@@ -651,6 +669,7 @@ func stacked(series [][]float64, pads []*platform, labels []string, fy func(floa
 		}
 		b.WriteString(`</g>`)
 	}
+	b.WriteString(left.String())
 	for _, j := range []int{0, n / 2, n - 1} {
 		anchor := "start"
 		if j == n-1 {
@@ -658,10 +677,33 @@ func stacked(series [][]float64, pads []*platform, labels []string, fy func(floa
 		} else if j == n/2 {
 			anchor = "middle"
 		}
-		fmt.Fprintf(&b, `<text x="%.1f" y="%g" class="tick" text-anchor="%s">%s</text>`, float64(j)*group+group/2, h-6, anchor, labels[j])
+		fmt.Fprintf(&b, `<text x="%.1f" y="%g" class="tick x" text-anchor="%s">%s</text>`, float64(j)*group+group/2, h-6, anchor, labels[j])
 	}
 	b.WriteString(`</svg>`)
 	return template.HTML(b.String())
+}
+
+// niceStep rounds a gridline interval up to 1, 2 or 5 × 10ⁿ, never below 1
+// (counts stay whole).
+func niceStep(x float64) float64 {
+	if x <= 1 {
+		return 1
+	}
+	e := math.Pow(10, math.Floor(math.Log10(x)))
+	for _, m := range []float64{1, 2, 5, 10} {
+		if m*e >= x {
+			return m * e
+		}
+	}
+	return 10 * e
+}
+
+// trimZero drops a trailing ".0" before a unit: "$2.0M" → "$2M".
+func trimZero(s string) string {
+	for _, u := range []string{"K", "M", "B"} {
+		s = strings.Replace(s, ".0"+u, u, 1)
+	}
+	return s
 }
 
 // spark is a tiny 30-bar volume strip in the row's platform colour; today is
@@ -673,7 +715,7 @@ func spark(vals []float64) template.HTML {
 		maxV = math.Max(maxV, v)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="spark" aria-hidden="true">`, w, h)
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="spark" preserveAspectRatio="none" aria-hidden="true">`, w, h)
 	bw := w/float64(len(vals)) - gap
 	for j, v := range vals {
 		bh := 1.5

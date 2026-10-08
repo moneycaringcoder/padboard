@@ -125,16 +125,23 @@ func fmtAgo(ts int64) string {
 	}
 }
 
-// fmtDelta renders a signed percentage change, Pons-style.
+// fmtDelta renders a signed change: percent up to +200%, then as a multiple
+// ("4.2×", "12×"), so tiny prior windows don't print a capped "+999%".
 func fmtDelta(p float64) template.HTML {
 	if p == 0 || math.IsInf(p, 0) || math.IsNaN(p) {
 		return ""
 	}
-	cls := "up"
 	if p < 0 {
-		cls = "down"
+		return template.HTML(fmt.Sprintf(`<span class="down">%.0f%%</span>`, p))
 	}
-	return template.HTML(fmt.Sprintf(`<span class="%s">%+.0f%%</span>`, cls, math.Max(-999, math.Min(999, p))))
+	if x := 1 + p/100; x >= 3 {
+		f := "%.1f×"
+		if x >= 10 {
+			f = "%.0f×"
+		}
+		return template.HTML(`<span class="up">` + fmt.Sprintf(f, x) + `</span>`)
+	}
+	return template.HTML(fmt.Sprintf(`<span class="up">+%.0f%%</span>`, p))
 }
 
 func pctChange(cur, prev float64) float64 {

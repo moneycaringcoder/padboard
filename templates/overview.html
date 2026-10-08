@@ -26,7 +26,7 @@
     <div><b>{{usd .Volume}}</b><small>Volume {{if .HasDelta}}{{delta .DVolume}}{{end}}</small></div>
     <div><b>{{k .Launches}}</b><small>Launches {{if .HasDelta}}{{delta .DLaunches}}{{end}}</small></div>
     <div><b>{{usd .Fees}}</b><small>Fees {{if .HasDelta}}{{delta .DFees}}{{end}}</small></div>
-    <div><b>{{usd .Protocol}}</b><small>Protocol revenue {{if .HasDelta}}{{delta .DProtocol}}{{end}}</small></div>
+    <div><b>{{usd .Protocol}}</b><small>Revenue {{if .HasDelta}}{{delta .DProtocol}}{{end}}</small></div>
   </div>
   {{end}}
 </section>
@@ -43,7 +43,7 @@
   {{range .Board}}
   <table class="lb r-{{.Key}}">
     <thead><tr>
-      <th class="rk">#</th><th>Launchpad</th><th class="r">Volume</th><th class="sh">Share</th>
+      <th class="rk">#</th><th>Launchpad</th><th class="r">Volume</th>
       <th class="r m">Launches</th><th class="r l">Trades</th><th class="r">Fees</th><th class="r l">Revenue</th><th class="sp m">Volume, 30 days</th>
     </tr></thead>
     <tbody>
@@ -52,7 +52,6 @@
       <td class="rk">{{inc $i}}</td>
       <td><a class="lp" href="{{.Href}}"><img src="{{.Logo}}" alt=""><span><b>{{.Name}}</b>{{if lt .Progress 100.0}}<small><i class="sync">indexing · {{pct .Progress}}</i></small>{{end}}</span></a></td>
       <td class="r num"><b>{{usd .Stats.Volume}}</b>{{if .Stats.HasDelta}}<small>{{delta .Stats.DVolume}}</small>{{end}}</td>
-      <td class="sh"><span class="sbar"><i style="width:{{printf "%.1f" .Share}}%"></i></span><small>{{pct .Share}}</small></td>
       <td class="r num m">{{k .Stats.Launches}}{{if .Stats.HasDelta}}<small>{{delta .Stats.DLaunches}}</small>{{end}}</td>
       <td class="r num l">{{k .Stats.Trades}}{{if .Stats.HasDelta}}<small>{{delta .Stats.DTrades}}</small>{{end}}</td>
       <td class="r num">{{usd .Stats.Fees}}{{if .Stats.HasDelta}}<small>{{delta .Stats.DFees}}</small>{{end}}</td>
@@ -62,7 +61,7 @@
     {{end}}
     </tbody>
     <tfoot><tr>
-      <td class="rk"></td><td class="tot">All launchpads</td><td class="r num"><b>{{usd .Total.Volume}}</b></td><td class="sh"></td>
+      <td class="rk"></td><td class="tot">All launchpads</td><td class="r num"><b>{{usd .Total.Volume}}</b></td>
       <td class="r num m">{{k .Total.Launches}}</td><td class="r num l">{{k .Total.Trades}}</td><td class="r num">{{usd .Total.Fees}}</td>
       <td class="r num l">{{usd .Total.Protocol}}</td><td class="sp m"></td>
     </tr></tfoot>
@@ -121,12 +120,14 @@
       {{template "segbar" .QuoteShares}}
       <p class="cap">Launches, by what they are paired with</p>
       {{template "segbar" .LaunchShares}}
-      <p class="chips">
-        {{range .Milestones}}<span>{{.}}</span>{{end}}
-        <span>{{k .Tokens}} tokens launched</span>
-        <span>{{k .All.Trades}} trades</span>
-        {{if .HasGraduation}}<span>{{.All.Graduations}} graduated</span>{{end}}
-      </p>
+      <p class="cap">Launches per day, last 30 days</p>
+      <div class="strip">{{.LaunchStrip}}</div>
+      <div class="facts">
+        {{range .Milestones}}<div><b>{{.Days}}d</b><small>to {{.Mark}} volume</small></div>{{end}}
+        <div><b>{{k .Tokens}}</b><small>tokens launched</small></div>
+        <div><b>{{k .All.Trades}}</b><small>trades, all time</small></div>
+        {{if .HasGraduation}}<div><b>{{k .All.Graduations}}</b><small>graduated</small></div>{{end}}
+      </div>
       <p class="note">{{.GraduationNote}} {{pct .UnpricedPct}} of swaps have no USD price for their quote asset; {{pct .SpotPct}} are priced at spot rather than hourly.</p>
     </div>
     {{end}}
@@ -187,7 +188,15 @@ try { picks = JSON.parse(localStorage.getItem('picks') || '{}'); } catch {}
 const pickIn = (card, k) => {
   if (!card.querySelector(`[data-v="${k}"]`)) return;
   card.querySelectorAll('[data-v]').forEach(v => v.hidden = v.dataset.v !== k);
-  card.querySelectorAll('.pick [data-k]').forEach(b => b.classList.toggle('on', b.dataset.k === k));
+  card.querySelectorAll('.pick [data-k]').forEach(b => {
+    b.classList.toggle('on', b.dataset.k === k);
+    b.setAttribute('aria-pressed', b.dataset.k === k);
+  });
+};
+// Range and metric buttons announce which one is selected.
+const syncPressed = () => {
+  document.querySelectorAll('#range button').forEach(b => b.setAttribute('aria-pressed', b.dataset.r === document.body.dataset.range));
+  document.querySelectorAll('.chart-card button[data-c]').forEach(b => b.setAttribute('aria-pressed', b.classList.contains('on')));
 };
 const applyPicks = root => root.querySelectorAll('.pickable').forEach(c =>
   pickIn(c, picks[c.dataset.card] || c.querySelector('[data-v]:not([hidden])').dataset.v));
@@ -197,6 +206,7 @@ document.addEventListener('click', e => {
   if (r) {
     document.body.dataset.range = r.dataset.r;
     try { localStorage.setItem('range', r.dataset.r); } catch {}
+    syncPressed();
     return;
   }
   const p = e.target.closest('.pickable .pick [data-k]');
@@ -211,11 +221,27 @@ document.addEventListener('click', e => {
   if (c) {
     c.closest('.chart-card').dataset.chart = c.dataset.c;
     for (const x of c.parentNode.children) x.classList.toggle('on', x === c);
+    syncPressed();
   }
 });
 // Live: re-fetch every minute while the tab is visible and swap the ticker and
 // <main> in place, keeping chart tabs and picks; unchanged pages (same ETag)
 // are skipped. Hidden tabs catch up as soon as they are shown.
+const NUMS = '.big b, .lb .num > b, .chart-total b, .clegend b, .dn figcaption b, .trio b, .ptok .num > b, .tk em';
+const value = s => {
+  const m = s.replace(/[$,+%×]/g, '').match(/-?[\d.]+/);
+  return m ? parseFloat(m[0]) * ({K: 1e3, M: 1e6, B: 1e9}[(s.match(/[KMB]/) || [''])[0]] || 1) : NaN;
+};
+const tint = (from, to) => {
+  const before = [...from.querySelectorAll(NUMS)].map(el => el.textContent.trim());
+  to.querySelectorAll(NUMS).forEach((el, i) => {
+    const a = before[i], b = el.textContent.trim();
+    if (a !== undefined && a !== b) el.classList.add(value(b) < value(a) ? 'moved-down' : 'moved-up');
+  });
+};
+// Swapped-in content shows at once; only user switches fade (see style.css).
+const calm = el => { el.classList.add('calm'); setTimeout(() => el.classList.remove('calm'), 60); };
+syncPressed();
 let etag = '', last = Date.now();
 const refresh = async () => {
   last = Date.now();
@@ -233,10 +259,15 @@ const refresh = async () => {
       c.querySelectorAll('button[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === tabs[i]));
     });
     applyPicks(main);
+    // Numbers that moved since the last minute get a brief up/down tint.
+    tint(document.getElementById('main'), main);
+    const tk = doc.getElementById('ticker'), old = document.getElementById('ticker');
+    if (tk && old) tint(old, tk);
+    calm(main);
     main.style.animation = 'none';
     document.getElementById('main').replaceWith(main);
-    const tk = doc.getElementById('ticker');
-    if (tk) document.getElementById('ticker')?.replaceWith(tk);
+    if (tk && old) { calm(tk); old.replaceWith(tk); }
+    syncPressed();
     etag = tag;
   } catch {}
 };
