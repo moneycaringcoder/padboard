@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"math"
 	"math/big"
 	"testing"
 )
@@ -98,5 +101,94 @@ func TestPriceFromSqrt(t *testing.T) {
 	four := new(big.Int).Mul(one, big.NewInt(2))
 	if p := priceFromSqrt(four, true, 18); p != 0.25 {
 		t.Fatalf("inverted = %v", p)
+	}
+}
+
+// Frontier platforms advance first; lagging ones backfill up to the next
+// cursor so they merge into one group.
+func TestNextRange(t *testing.T) {
+	keys := func(g []*platform) (out []string) {
+		for _, p := range g {
+			out = append(out, p.Key)
+		}
+		return out
+	}
+	heads := map[string]uint64{"stockereum": 100, "sender": 100, "stroid": 50, "clanker": 10}
+	steps := []struct {
+		group       string
+		from, limit uint64
+		lagging     bool
+		advanceTo   uint64
+	}{
+		{"[stockereum sender]", 101, 120, false, 120},
+		{"[clanker]", 11, 50, true, 50},
+		{"[stroid clanker]", 51, 120, true, 120},
+	}
+	for i, w := range steps {
+		g, from, limit, lagging := nextRange(heads, 120)
+		if got := fmt.Sprint(keys(g)); got != w.group || from != w.from || limit != w.limit || lagging != w.lagging {
+			t.Fatalf("step %d: %s %d-%d lagging=%v", i, got, from, limit, lagging)
+		}
+		for _, p := range g {
+			heads[p.Key] = w.advanceTo
+		}
+	}
+	if g, _, _, _ := nextRange(heads, 120); g != nil {
+		t.Fatalf("expected done, got %v", keys(g))
+	}
+}
+
+func TestStroidAccounting(t *testing.T) {
+	s := newState("")
+	c := &collector{state: s}
+	s.Quotes[ethAddr] = &Quote{Symbol: "ETH", Decimals: 18, USD: 2000}
+	if err := c.applyLaunch(context.Background(), logStroidLaunchV3); err != nil {
+		t.Fatal(err)
+	}
+	tok := s.Tokens["0xdd329755a6fd7595fef0a34ae18aed1e4797b62e"]
+	if tok == nil || tok.Platform != "stroid" || tok.Symbol == "" || tok.Name == "" || tok.Creator != "0xdf2237114d595e0bf4d35cbcdebcdf43c55c4669" || tok.Quote != ethAddr || !tok.QuoteIsC0 || tok.PoolID != "" {
+		t.Fatalf("launch = %+v", tok)
+	}
+	// Fee and partner events belong to another real token; register it.
+	s.Tokens["0x9710ae597e3ed4fb826e51002ee3d146219a1572"] = &Token{Platform: "stroid", Address: "0x9710ae597e3ed4fb826e51002ee3d146219a1572"}
+	ts := int64(1_800_000_000)
+	c.applyEvent(logStroidFee, ts)
+	c.applyEvent(logStroidPartner, ts)
+	a := s.Hours[hourKey("stroid", hourOf(ts))]
+	// V3 identity: total = creator + protocol + partner (here 25 / 50 / 25 percent).
+	total := units(wordBig(hexBytes(logStroidFee.Data), 0), 18) * 2000
+	if got := a.CreatorUSD + a.PlatformUSD + a.PartnerUSD; math.Abs(got-total) > 1e-9 || a.CreatorUSD == 0 || a.PartnerUSD == 0 {
+		t.Fatalf("split %+v, total %v", a, total)
+	}
+	// A pool on the hook that the launchpad never created is not Stroid's.
+	foreign := logStroidFee
+	foreign.Topics = []string{tStrFeeAccrued, "0x00000000000000000000000000000000000000000000000000000000000000ff"}
+	before := *a
+	c.applyEvent(foreign, ts)
+	if *a != before {
+		t.Fatal("foreign token accounted")
+	}
+}
+
+func TestClankerAccounting(t *testing.T) {
+	s := newState("")
+	c := &collector{state: s}
+	s.Quotes[ethAddr] = &Quote{Symbol: "ETH", Decimals: 18, USD: 2000} // WETH prices as ETH
+	s.Quotes[wethAddr] = &Quote{Symbol: "WETH", Decimals: 18}
+	if err := c.applyLaunch(context.Background(), logClankerCreated); err != nil {
+		t.Fatal(err)
+	}
+	tok := s.Tokens["0x90d54d77453286d30db891d729a0e18ba7081b07"]
+	if tok == nil || tok.Platform != "clanker" || tok.Quote != wethAddr || tok.Symbol == "" || tok.Creator != "0x477b7fcf2879fbeecb83781509a4ef73d9d84ed4" || len(tok.PoolID) != 66 || s.Pools[tok.PoolID] != tok.Address {
+		t.Fatalf("launch = %+v", tok)
+	}
+	// Token sorts below WETH, so WETH is currency1 and rewards1 is the WETH side.
+	tok.QuoteIsC0 = false
+	ts := int64(logClankerRewards.BlockTimestamp)
+	c.applyEvent(logClankerRewards, ts)
+	a := s.Hours[hourKey("clanker", hourOf(ts))]
+	want := units(wordBig(hexBytes(logClankerRewards.Data), 1), 18) * 2000
+	if a == nil || math.Abs(a.CreatorUSD-want) > 1e-12 || a.PartnerUSD != 0 {
+		t.Fatalf("rewards = %+v want creator %v", a, want)
 	}
 }

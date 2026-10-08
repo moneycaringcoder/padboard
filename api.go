@@ -59,13 +59,15 @@ func toWindow(r rangeStats) apiWindow {
 }
 
 type apiPlatform struct {
-	Key    string               `json:"key"`
-	Name   string               `json:"name"`
-	Site   string               `json:"site"`
-	Tokens int                  `json:"tokensLaunched"`
-	Token  apiPlatformToken     `json:"platformToken"`
-	Today  apiWindow            `json:"today"`
-	Ranges map[string]apiWindow `json:"ranges"` // 24h, 7d, 30d, all
+	Key      string               `json:"key"`
+	Name     string               `json:"name"`
+	Site     string               `json:"site"`
+	Tokens   int                  `json:"tokensLaunched"`
+	SyncedTo uint64               `json:"syncedToBlock"`
+	Indexed  float64              `json:"indexedPct"` // share of the platform's history indexed; 100 when caught up
+	Token    *apiPlatformToken    `json:"platformToken,omitempty"`
+	Today    apiWindow            `json:"today"`
+	Ranges   map[string]apiWindow `json:"ranges"` // 24h, 7d, 30d, all
 }
 
 type apiPlatformToken struct {
@@ -80,23 +82,32 @@ type apiPlatformToken struct {
 }
 
 func (c *collector) apiSummary(w http.ResponseWriter, r *http.Request) {
-	pv := buildView(c.state)
+	s := c.state
+	s.mu.RLock()
 	out := struct {
 		UpdatedAt int64         `json:"updatedAt"`
 		Head      uint64        `json:"headBlock"`
 		HeadTime  int64         `json:"headBlockTime"`
 		ETHUSD    float64       `json:"ethUsd"`
 		Platforms []apiPlatform `json:"platforms"`
-	}{UpdatedAt: pv.SyncedAt.Unix(), Head: pv.Head, HeadTime: pv.HeadTime.Unix(), ETHUSD: pv.ETHUSD}
-	for _, col := range pv.Columns {
-		p := apiPlatform{Key: col.Key, Name: col.Name, Site: col.Site, Tokens: col.Tokens, Today: toWindow(col.Today), Ranges: map[string]apiWindow{}}
-		for _, rs := range col.Ranges {
-			p.Ranges[rs.Key] = toWindow(rs)
-		}
-		t := col.Token
-		p.Token = apiPlatformToken{t.Symbol, t.Address, t.Price, t.Change24, t.Supply, t.Burned, t.FDV, t.Mcap}
-		out.Platforms = append(out.Platforms, p)
+	}{UpdatedAt: s.SyncedAt, Head: s.Head, HeadTime: s.HeadTime}
+	if q := s.Quotes[ethAddr]; q != nil {
+		out.ETHUSD = q.USD
 	}
+	byPad, now := hoursByPad(s), time.Now().UTC()
+	for _, p := range platforms {
+		col := buildColumn(s, p, byPad[p.Key], now, false)
+		ap := apiPlatform{Key: p.Key, Name: p.Name, Site: p.Site, Tokens: col.Tokens, SyncedTo: s.Heads[p.Key], Indexed: col.Progress,
+			Today: toWindow(col.Today), Ranges: map[string]apiWindow{}}
+		for _, rs := range col.Ranges {
+			ap.Ranges[rs.Key] = toWindow(rs)
+		}
+		if t := col.Token; p.Token != "" {
+			ap.Token = &apiPlatformToken{t.Symbol, t.Address, t.Price, t.Change24, t.Supply, t.Burned, t.FDV, t.Mcap}
+		}
+		out.Platforms = append(out.Platforms, ap)
+	}
+	s.mu.RUnlock()
 	writeJSON(w, out)
 }
 
@@ -108,7 +119,7 @@ func (c *collector) apiDaily(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("interval") == "hour" {
 		bucket = 3600
 	}
-	hours := s.hours()
+	byPad := hoursByPad(s)
 	type row struct {
 		T    int64           `json:"t"`
 		Date string          `json:"date"`
@@ -116,7 +127,7 @@ func (c *collector) apiDaily(w http.ResponseWriter, r *http.Request) {
 	}
 	rows := map[int64]*row{}
 	for _, p := range platforms {
-		for _, d := range dailyAggs(s, p, hours, bucket) {
+		for _, d := range dailyAggs(byPad[p.Key], bucket) {
 			rw := rows[d.T]
 			if rw == nil {
 				rw = &row{T: d.T, Date: time.Unix(d.T, 0).UTC().Format(time.RFC3339), Per: map[string]*Agg{}}

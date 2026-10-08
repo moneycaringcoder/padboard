@@ -182,10 +182,27 @@ type logFilter struct {
 	Topics    []any    `json:"topics,omitempty"`
 }
 
+// getLogs fetches one filter. Alchemy caps responses at 10k logs for ranges
+// over 10k blocks; such ranges are halved until each part fits.
 func (c *rpcClient) getLogs(ctx context.Context, f logFilter) ([]Log, error) {
 	var logs []Log
 	err := c.call(ctx, "eth_getLogs", []any{f}, &logs)
-	return logs, err
+	if err == nil || !strings.Contains(err.Error(), "response size exceeded") {
+		return logs, err
+	}
+	from, _ := strconv.ParseUint(strings.TrimPrefix(f.FromBlock, "0x"), 16, 64)
+	to, _ := strconv.ParseUint(strings.TrimPrefix(f.ToBlock, "0x"), 16, 64)
+	if to <= from {
+		return nil, err
+	}
+	a, b := f, f
+	a.ToBlock, b.FromBlock = hexQty(from+(to-from)/2), hexQty(from+(to-from)/2+1)
+	la, err := c.getLogs(ctx, a)
+	if err != nil {
+		return nil, err
+	}
+	lb, err := c.getLogs(ctx, b)
+	return append(la, lb...), err
 }
 
 // callMany runs eth_call with the same calldata against many addresses and
@@ -300,6 +317,24 @@ func wordString(data []byte, i int) string {
 		return ""
 	}
 	return string(data[o+32 : o+32+int(n.Int64())])
+}
+
+// wordUints decodes a dynamic uint256[] whose offset is in word i.
+func wordUints(data []byte, i int) []*big.Int {
+	off := wordBig(data, i)
+	if !off.IsInt64() || off.Int64()+32 > int64(len(data)) {
+		return nil
+	}
+	o := int(off.Int64())
+	n := new(big.Int).SetBytes(data[o : o+32])
+	if !n.IsInt64() || int64(o+32)+32*n.Int64() > int64(len(data)) {
+		return nil
+	}
+	out := make([]*big.Int, n.Int64())
+	for k := range out {
+		out[k] = new(big.Int).SetBytes(data[o+32+32*k : o+64+32*k])
+	}
+	return out
 }
 
 // decodeStringResult handles both ABI strings and legacy bytes32 symbols.

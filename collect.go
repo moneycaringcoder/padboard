@@ -8,55 +8,100 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	chunkBlocks   = 10_000 // Alchemy: unlimited logs per response within 10k blocks
-	confirmations = 12
-	poolTopicMax  = 1_500 // pool ids per Swap filter request
+	chunkBlocks    = 10_000  // starting window; Alchemy never caps logs inside 10k blocks
+	maxSpan        = 400_000 // widest window while backfilling sparse history
+	confirmations  = 12
+	poolTopicMax   = 1_500 // pool ids per Swap filter request
+	backfillBudget = 3 * time.Minute
 )
 
 var toLower = strings.ToLower
 
 type collector struct {
-	rpc    *rpcClient
-	prices *priceClient
-	state  *State
+	rpc     *rpcClient
+	prices  *priceClient
+	state   *State
+	ethFrom int64 // hour of the earliest platform genesis; ETH/USD history starts here
 }
 
-// sync advances the state from Head to the current safe head, chunk by chunk,
-// checkpointing after each chunk so a crash resumes cleanly.
-func (c *collector) sync(ctx context.Context) error {
+// sync advances every platform's cursor toward the current safe head,
+// checkpointing after each window so a crash resumes cleanly. Platforms at the
+// frontier always advance first so live numbers stay fresh; platforms behind
+// it (newly added ones) then backfill for at most backfillBudget per call.
+// more reports that backfill remains and the caller should call again now.
+func (c *collector) sync(ctx context.Context) (more bool, err error) {
+	start := time.Now()
 	latest, err := c.rpc.blockNumber(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	safe := latest - confirmations
 	s := c.state
-	if s.Head == 0 {
-		s.Head = genesisBlock - 1
+	s.mu.Lock()
+	s.Tip = safe
+	for _, p := range platforms {
+		if _, ok := s.Heads[p.Key]; !ok {
+			s.Heads[p.Key] = p.Genesis - 1
+		}
 	}
-	if err := c.refreshPrices(ctx, safe); err != nil {
-		return fmt.Errorf("prices: %w", err)
+	s.mu.Unlock()
+	if err := c.refreshPrices(ctx); err != nil {
+		return false, fmt.Errorf("prices: %w", err)
 	}
-	for from := s.Head + 1; from <= safe; from += chunkBlocks {
-		to := min(from+chunkBlocks-1, safe)
+	// Sender's first v2 hook was added after its cursor had passed it.
+	if err := c.replay(ctx, "0xee83560bb83fa38dcd3c1060233ddc7933c520cc", 26110133); err != nil {
+		return false, fmt.Errorf("replay: %w", err)
+	}
+	span, lastGroup := uint64(chunkBlocks), ""
+	for {
+		s.mu.RLock()
+		group, from, limit, lagging := nextRange(s.Heads, safe)
+		s.mu.RUnlock()
+		if group == nil {
+			break
+		}
+		if lagging && time.Since(start) > backfillBudget {
+			more = true // let the frontier refresh before backfilling further
+			break
+		}
+		keys := make([]string, len(group))
+		for i, p := range group {
+			keys[i] = p.Key
+		}
+		if k := strings.Join(keys, ","); k != lastGroup {
+			span, lastGroup = chunkBlocks, k
+		}
+		to := min(from+span-1, limit)
 		t0 := time.Now()
-		n, err := c.processRange(ctx, from, to)
+		n, err := c.processRange(ctx, group, from, to)
 		if err != nil {
-			return fmt.Errorf("blocks %d-%d: %w", from, to, err)
+			return false, fmt.Errorf("%s blocks %d-%d: %w", lastGroup, from, to, err)
 		}
 		s.mu.Lock()
-		s.Head = to
+		for _, p := range group {
+			s.Heads[p.Key] = to
+		}
+		s.Head = max(s.Head, to)
 		s.SyncedAt = time.Now().Unix()
 		s.mu.Unlock()
 		if err := s.save(); err != nil {
-			return err
+			return false, err
 		}
-		log.Printf("synced %d-%d: %d logs, %d tokens, %s", from, to, n, len(s.Tokens), time.Since(t0).Truncate(time.Millisecond))
+		log.Printf("synced %s %d-%d: %d logs, %d tokens, %s", lastGroup, from, to, n, len(s.Tokens), time.Since(t0).Truncate(time.Millisecond))
+		// Widen the window through sparse history, narrow it through dense.
+		switch {
+		case n < 5_000:
+			span = min(span*2, maxSpan)
+		case n > 50_000:
+			span = max(span/2, chunkBlocks)
+		}
 	}
 	if ts, err := c.rpc.blockTime(ctx, s.Head); err == nil {
 		s.mu.Lock()
@@ -64,18 +109,89 @@ func (c *collector) sync(ctx context.Context) error {
 		s.mu.Unlock()
 	}
 	if err := c.refreshBurned(ctx); err != nil {
-		return err
+		return more, err
 	}
 	c.fillQuoteLogos(ctx)
 	if err := c.fillImages(ctx); err != nil {
 		log.Printf("images: %v", err)
 	}
+	return more, s.save()
+}
+
+// nextRange picks the platforms to advance next: those at the newest cursor
+// while it trails the safe head, otherwise (lagging) those at the oldest
+// cursor, which stop at the next cursor up so the groups merge. group is nil
+// when every platform is at the safe head.
+func nextRange(heads map[string]uint64, safe uint64) (group []*platform, from, limit uint64, lagging bool) {
+	lo, hi := uint64(math.MaxUint64), uint64(0)
+	for _, p := range platforms {
+		lo, hi = min(lo, heads[p.Key]), max(hi, heads[p.Key])
+	}
+	target := hi
+	if hi >= safe {
+		target = lo
+	}
+	if target >= safe {
+		return nil, 0, 0, false
+	}
+	limit = safe
+	for _, p := range platforms {
+		switch h := heads[p.Key]; {
+		case h == target:
+			group = append(group, p)
+		case h > target:
+			limit = min(limit, h)
+		}
+	}
+	return group, target + 1, limit, target != hi
+}
+
+// replay applies one contract's past events once: for a contract added to a
+// platform after that platform's cursor had already passed `from`.
+func (c *collector) replay(ctx context.Context, addr string, from uint64) error {
+	s := c.state
+	s.mu.RLock()
+	done, to := s.Done[addr], s.Heads[platformByAddr[addr].Key]
+	s.mu.RUnlock()
+	if done {
+		return nil
+	}
+	if to >= from {
+		logs, err := c.rpc.getLogs(ctx, logFilter{FromBlock: hexQty(from), ToBlock: hexQty(to), Address: []string{addr}})
+		if err != nil {
+			return err
+		}
+		sortLogs(logs)
+		s.mu.Lock()
+		for _, l := range logs {
+			ts, err := c.logTime(ctx, l)
+			if err != nil {
+				s.mu.Unlock()
+				return err
+			}
+			c.applyEvent(l, ts)
+		}
+		s.mu.Unlock()
+		log.Printf("replayed %d logs from %s (blocks %d-%d)", len(logs), addr, from, to)
+	}
+	s.mu.Lock()
+	s.Done[addr] = true
+	s.mu.Unlock()
 	return s.save()
+}
+
+func sortLogs(ls []Log) {
+	sort.Slice(ls, func(i, j int) bool {
+		if ls[i].BlockNumber != ls[j].BlockNumber {
+			return ls[i].BlockNumber < ls[j].BlockNumber
+		}
+		return ls[i].LogIndex < ls[j].LogIndex
+	})
 }
 
 // refreshPrices updates spot prices for every known quote and extends the
 // hourly ETH series up to the present.
-func (c *collector) refreshPrices(ctx context.Context, head uint64) error {
+func (c *collector) refreshPrices(ctx context.Context) error {
 	s := c.state
 	s.mu.RLock()
 	addrs := []string{ethAddr}
@@ -88,29 +204,58 @@ func (c *collector) refreshPrices(ctx context.Context, head uint64) error {
 	if err := c.priceQuotes(ctx, addrs); err != nil {
 		return err
 	}
-	// ETH hourly: from the last stored hour (or genesis) to now.
-	start := time.Unix(1_788_300_000, 0) // 2026-09-01, before either factory existed
+	// ETH hourly: back to the earliest platform genesis once, then forward to now.
+	if c.ethFrom == 0 {
+		g := platforms[0].Genesis
+		for _, p := range platforms {
+			g = min(g, p.Genesis)
+		}
+		ts, err := c.rpc.blockTime(ctx, g)
+		if err != nil {
+			return err
+		}
+		c.ethFrom = hourOf(ts)
+	}
+	var lo, hi int64
 	s.mu.RLock()
 	for k := range s.EthHourly {
-		var h int64
-		fmt.Sscan(k, &h)
-		if t := time.Unix(h, 0); t.After(start) {
-			start = t
+		h, _ := strconv.ParseInt(k, 10, 64)
+		if lo == 0 || h < lo {
+			lo = h
+		}
+		hi = max(hi, h)
+	}
+	back := lo == 0 || (lo > c.ethFrom && !s.Done["eth-history"])
+	s.mu.RUnlock()
+	type span struct{ from, to int64 }
+	var spans []span
+	switch {
+	case hi == 0:
+		spans = append(spans, span{c.ethFrom, time.Now().Unix()})
+	default:
+		if back {
+			spans = append(spans, span{c.ethFrom, lo})
+		}
+		if time.Since(time.Unix(hi, 0)) >= 30*time.Minute {
+			spans = append(spans, span{hi, time.Now().Unix()})
 		}
 	}
-	s.mu.RUnlock()
-	if time.Since(start) < 30*time.Minute {
-		return nil
+	for _, sp := range spans {
+		series, err := c.prices.ethHourly(ctx, time.Unix(sp.from, 0), time.Unix(sp.to, 0))
+		if err != nil {
+			return err
+		}
+		s.mu.Lock()
+		for k, v := range series {
+			s.EthHourly[k] = v
+		}
+		s.mu.Unlock()
 	}
-	series, err := c.prices.ethHourly(ctx, start, time.Now())
-	if err != nil {
-		return err
+	if back {
+		s.mu.Lock()
+		s.Done["eth-history"] = true // the API may simply have nothing older
+		s.mu.Unlock()
 	}
-	s.mu.Lock()
-	for k, v := range series {
-		s.EthHourly[k] = v
-	}
-	s.mu.Unlock()
 	return nil
 }
 
@@ -166,13 +311,13 @@ func (c *collector) priceQuotes(ctx context.Context, addrs []string) error {
 	return nil
 }
 
-// processRange fetches and applies every relevant log in [from, to].
-func (c *collector) processRange(ctx context.Context, from, to uint64) (int, error) {
+// processRange fetches and applies every log of the given platforms in [from, to].
+func (c *collector) processRange(ctx context.Context, group []*platform, from, to uint64) (int, error) {
 	s := c.state
 	f := logFilter{FromBlock: hexQty(from), ToBlock: hexQty(to)}
 
 	// 1. Platform contracts: launches, fee events, graduations.
-	f.Address = allPlatformAddrs()
+	f.Address = contractsOf(group)
 	plat, err := c.rpc.getLogs(ctx, f)
 	if err != nil {
 		return 0, err
@@ -183,80 +328,84 @@ func (c *collector) processRange(ctx context.Context, from, to uint64) (int, err
 		}
 	}
 
-	// 2. Pool initialisation for pools launched in this range (gives quote side).
-	var newPools []string
+	// 2. Bind launches to their v4 pools via PoolManager Initialize (gives the
+	// quote side). Most launch events name the pool id; Stroid's name only the
+	// token, which is currency1 against native ETH.
+	var ids, toks []string
 	for _, l := range plat {
 		switch l.Topics[0] {
 		case tStkLaunchedV1, tStkLaunchedV2:
-			newPools = append(newPools, "0x"+hexOf(word(hexBytes(l.Data), 0)))
+			ids = append(ids, "0x"+hexOf(word(hexBytes(l.Data), 0)))
+		case tClkCreated:
+			ids = append(ids, "0x"+hexOf(word(hexBytes(l.Data), 8)))
 		case tSndLaunched:
-			newPools = append(newPools, toLower(l.Topics[3]))
+			ids = append(ids, toLower(l.Topics[3]))
 		case tSndLaunchedV2:
-			newPools = append(newPools, toLower(l.Topics[1]))
+			ids = append(ids, toLower(l.Topics[1]))
+		case tStrLaunchedV1, tStrLaunchedV2, tStrLaunchedV3:
+			toks = append(toks, toLower(l.Topics[1]))
 		}
 	}
-	if len(newPools) > 0 {
-		inits, err := c.rpc.getLogs(ctx, logFilter{FromBlock: f.FromBlock, ToBlock: f.ToBlock, Address: []string{poolManager}, Topics: []any{tPMInitialize, newPools}})
-		if err != nil {
-			return 0, err
-		}
-		var newQuotes []string
-		s.mu.Lock()
-		for _, l := range inits {
-			tok := s.Tokens[s.Pools[toLower(l.Topics[1])]]
-			if tok == nil {
-				continue
-			}
-			c0, c1 := topicAddr(l.Topics[2]), topicAddr(l.Topics[3])
-			tok.QuoteIsC0 = c0 != tok.Address
-			tok.Quote = c1
-			if tok.QuoteIsC0 {
-				tok.Quote = c0
-			}
-			if s.Quotes[tok.Quote] == nil {
-				newQuotes = append(newQuotes, tok.Quote)
-			}
-		}
-		s.mu.Unlock()
-		if err := c.priceQuotes(ctx, dedupe(newQuotes)); err != nil {
-			return 0, err
-		}
-	}
-
-	// 3. Swaps on every known pool.
-	s.mu.RLock()
-	pools := make([]string, 0, len(s.Pools))
-	for id := range s.Pools {
-		pools = append(pools, id)
-	}
-	s.mu.RUnlock()
-	// Pool-id chunks are independent filters; fetch them concurrently.
-	parts := make([][]Log, (len(pools)+poolTopicMax-1)/poolTopicMax)
-	errs := make([]error, len(parts))
-	var wg sync.WaitGroup
-	for k := range parts {
-		part := pools[k*poolTopicMax : min((k+1)*poolTopicMax, len(pools))]
-		wg.Go(func() {
-			parts[k], errs[k] = c.rpc.getLogs(ctx, logFilter{FromBlock: f.FromBlock, ToBlock: f.ToBlock, Address: []string{poolManager}, Topics: []any{tPMSwap, part}})
-		})
-	}
-	wg.Wait()
-	if err := errors.Join(errs...); err != nil {
+	pm := logFilter{FromBlock: f.FromBlock, ToBlock: f.ToBlock, Address: []string{poolManager}}
+	byID, err := c.logsByTopic(ctx, pm, tPMInitialize, 1, ids)
+	if err != nil {
 		return 0, err
 	}
-	var swaps []Log
-	for _, ls := range parts {
-		swaps = append(swaps, ls...)
+	byToken, err := c.logsByTopic(ctx, pm, tPMInitialize, 3, toks)
+	if err != nil {
+		return 0, err
+	}
+	var newQuotes []string
+	s.mu.Lock()
+	for _, l := range append(byID, byToken...) {
+		id := toLower(l.Topics[1])
+		tok := s.Tokens[s.Pools[id]]
+		if tok == nil {
+			// Anyone can open another pool for a token; take the one on the platform's own hook.
+			t := s.Tokens[topicAddr(l.Topics[3])]
+			if p := platformByAddr[wordAddr(hexBytes(l.Data), 2)]; t == nil || t.PoolID != "" || p == nil || p.Key != t.Platform {
+				continue
+			}
+			tok = t
+			tok.PoolID = id
+			s.Pools[id] = t.Address
+		}
+		c0, c1 := topicAddr(l.Topics[2]), topicAddr(l.Topics[3])
+		tok.QuoteIsC0 = c0 != tok.Address
+		tok.Quote = c1
+		if tok.QuoteIsC0 {
+			tok.Quote = c0
+		}
+		if s.Quotes[tok.Quote] == nil {
+			newQuotes = append(newQuotes, tok.Quote)
+		}
+	}
+	s.mu.Unlock()
+	if err := c.priceQuotes(ctx, dedupe(newQuotes)); err != nil {
+		return 0, err
+	}
+
+	// 3. Swaps on every pool of these platforms.
+	in := map[string]bool{}
+	for _, p := range group {
+		in[p.Key] = true
+	}
+	s.mu.RLock()
+	var pools []string
+	for id, addr := range s.Pools {
+		if t := s.Tokens[addr]; t != nil && in[t.Platform] {
+			pools = append(pools, id)
+		}
+	}
+	s.mu.RUnlock()
+	swaps, err := c.logsByTopic(ctx, pm, tPMSwap, 1, pools)
+	if err != nil {
+		return 0, err
 	}
 
 	// 4. Apply fee/graduation/swap logs in chain order.
 	rest := append(swaps, plat...)
-	sort.Slice(rest, func(i, j int) bool {
-		if rest[i].BlockNumber != rest[j].BlockNumber {
-			return rest[i].BlockNumber < rest[j].BlockNumber
-		}
-		return rest[i].LogIndex < rest[j].LogIndex
-	})
+	sortLogs(rest)
 	s.mu.Lock()
 	for _, l := range rest {
 		ts, err := c.logTime(ctx, l)
@@ -270,25 +419,52 @@ func (c *collector) processRange(ctx context.Context, from, to uint64) (int, err
 	return len(plat) + len(swaps), c.fillMetadata(ctx)
 }
 
-// fillMetadata fetches name/symbol/supply for tokens not yet described.
+// logsByTopic fetches logs matching f with topic0 and any of values at topic
+// position pos, poolTopicMax values per request, requests in parallel.
+func (c *collector) logsByTopic(ctx context.Context, f logFilter, topic0 string, pos int, values []string) ([]Log, error) {
+	parts := make([][]Log, (len(values)+poolTopicMax-1)/poolTopicMax)
+	errs := make([]error, len(parts))
+	var wg sync.WaitGroup
+	for k := range parts {
+		g := f
+		g.Topics = make([]any, pos+1)
+		g.Topics[0], g.Topics[pos] = topic0, values[k*poolTopicMax:min((k+1)*poolTopicMax, len(values))]
+		wg.Go(func() { parts[k], errs[k] = c.rpc.getLogs(ctx, g) })
+	}
+	wg.Wait()
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	var out []Log
+	for _, ls := range parts {
+		out = append(out, ls...)
+	}
+	return out, nil
+}
+
+// fillMetadata fetches supply for new tokens, and name/symbol for those whose
+// launch event did not carry them.
 func (c *collector) fillMetadata(ctx context.Context) error {
 	s := c.state
 	s.mu.RLock()
-	var missing []string
+	var missing, unnamed []string
 	for a, t := range s.Tokens {
 		if t.Supply == 0 {
 			missing = append(missing, a)
+			if t.Symbol == "" {
+				unnamed = append(unnamed, a)
+			}
 		}
 	}
 	s.mu.RUnlock()
 	if len(missing) == 0 {
 		return nil
 	}
-	symbols, err := c.rpc.callStrings(ctx, missing, selSymbol)
+	symbols, err := c.rpc.callStrings(ctx, unnamed, selSymbol)
 	if err != nil {
 		return err
 	}
-	names, err := c.rpc.callStrings(ctx, missing, selName)
+	names, err := c.rpc.callStrings(ctx, unnamed, selName)
 	if err != nil {
 		return err
 	}
@@ -313,9 +489,11 @@ func (c *collector) fillMetadata(ctx context.Context) error {
 
 // refreshBurned reads each platform token's balance at the dead address.
 func (c *collector) refreshBurned(ctx context.Context) error {
-	addrs := make([]string, 0, len(platforms))
+	var addrs []string
 	for _, p := range platforms {
-		addrs = append(addrs, p.Token)
+		if p.Token != "" {
+			addrs = append(addrs, p.Token)
+		}
 	}
 	burned, err := c.rpc.callUnits(ctx, addrs, callBalanceDead)
 	if err != nil {
@@ -324,7 +502,9 @@ func (c *collector) refreshBurned(ctx context.Context) error {
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
 	for _, p := range platforms {
-		c.state.Burned[p.Key] = burned[p.Token]
+		if p.Token != "" {
+			c.state.Burned[p.Key] = burned[p.Token]
+		}
 	}
 	return nil
 }
@@ -376,6 +556,18 @@ func (c *collector) applyLaunch(ctx context.Context, l Log) error {
 		s.TokenIDs[tok.TokenID] = tok.Address
 	case tSndLaunchedV2:
 		tok = &Token{Platform: p.Key, Address: topicAddr(l.Topics[2]), Creator: topicAddr(l.Topics[3]), PoolID: toLower(l.Topics[1]), Quote: wordAddr(data, 1)}
+	case tStrLaunchedV1, tStrLaunchedV2: // pool is bound from PoolManager Initialize
+		tok = &Token{Platform: p.Key, Address: topicAddr(l.Topics[1]), Creator: topicAddr(l.Topics[2]), Quote: ethAddr, QuoteIsC0: true,
+			Name: wordString(data, 0), Symbol: wordString(data, 1), MetaURI: wordString(data, 2)}
+	case tStrLaunchedV3: // word 0 is the partner
+		tok = &Token{Platform: p.Key, Address: topicAddr(l.Topics[1]), Creator: topicAddr(l.Topics[2]), Quote: ethAddr, QuoteIsC0: true,
+			Name: wordString(data, 1), Symbol: wordString(data, 2), MetaURI: wordString(data, 3)}
+	case tClkCreated:
+		tok = &Token{Platform: p.Key, Address: topicAddr(l.Topics[1]), Creator: topicAddr(l.Topics[2]), PoolID: "0x" + hexOf(word(data, 8)), Quote: wordAddr(data, 9),
+			Name: wordString(data, 2), Symbol: wordString(data, 3)}
+		if img := gatewayURL(strings.TrimSpace(wordString(data, 1))); strings.HasPrefix(img, "https://") {
+			tok.Image = img
+		}
 	case tStkCreationFee, tSndLaunchFee:
 		s.LaunchFee[p.Key] = units(wordBig(data, 0), 18)
 	case tSndLaunchFeeV2:
@@ -389,7 +581,9 @@ func (c *collector) applyLaunch(ctx context.Context, l Log) error {
 	}
 	tok.Created, tok.Block = ts, uint64(l.BlockNumber)
 	s.Tokens[tok.Address] = tok
-	s.Pools[tok.PoolID] = tok.Address
+	if tok.PoolID != "" {
+		s.Pools[tok.PoolID] = tok.Address
+	}
 	a := s.agg(p.Key, ts)
 	a.Launches++
 	a.LaunchFees += s.LaunchFee[p.Key] * s.ethPrice(ts)
@@ -488,7 +682,63 @@ func (c *collector) applyEvent(l Log, ts int64) {
 		}
 		tok.Graduated = ts
 		s.agg(p.Key, ts).Graduations++
+	case tStrFeeAccrued: // Stroid hook: per-swap fee in ETH (total, creator, protocol)
+		if t := s.Tokens[topicAddr(l.Topics[1])]; t == nil || t.Platform != p.Key {
+			return // a pool on the hook that the launchpad did not create
+		}
+		a := s.agg(p.Key, ts)
+		a.CreatorUSD += c.quoteUSD(ethAddr, wordBig(data, 1), ts)
+		a.PlatformUSD += c.quoteUSD(ethAddr, wordBig(data, 2), ts)
+	case tStrPartnerFee, tStrModuleFee: // Stroid V3: cuts taken from the protocol share
+		if t := s.Tokens[topicAddr(l.Topics[1])]; t == nil || t.Platform != p.Key {
+			return
+		}
+		s.agg(p.Key, ts).PartnerUSD += c.quoteUSD(ethAddr, wordBig(data, 0), ts)
+	case tStrClaimed:
+		if topicAddr(l.Topics[1]) != p.PlatformRecipient {
+			// ponytail: partner claims count as creator payouts too; split if partners grow.
+			s.agg(p.Key, ts).CreatorPaid += c.quoteUSD(ethAddr, wordBig(data, 0), ts)
+		}
+	case tClkRewards: // LP locker: fees collected for the launch's reward recipients
+		tok := s.Tokens[topicAddr(l.Topics[1])]
+		if tok == nil {
+			return
+		}
+		c0, c1 := tok.Address, tok.Quote
+		if tok.QuoteIsC0 {
+			c0, c1 = c1, c0
+		}
+		r0, r1 := wordUints(data, 2), wordUints(data, 3)
+		a := s.agg(p.Key, ts)
+		for i := range max(len(r0), len(r1)) {
+			usd := 0.0
+			if i < len(r0) {
+				usd += c.assetUSD(c0, r0[i], ts)
+			}
+			if i < len(r1) {
+				usd += c.assetUSD(c1, r1[i], ts)
+			}
+			if i == 0 {
+				a.CreatorUSD += usd
+			} else {
+				a.PartnerUSD += usd
+			}
+		}
+	case tClkProtocolFees: // hook: Clanker's protocol cut, moved out when rewards are collected
+		s.agg(p.Key, ts).PlatformUSD += c.assetUSD(topicAddr(l.Topics[1]), wordBig(data, 0), ts)
+	case tClkClaimTokens: // fee locker: a reward recipient withdraws
+		// ponytail: partner withdrawals count as creator payouts too; split by owner if partners grow.
+		s.agg(p.Key, ts).CreatorPaid += c.assetUSD(topicAddr(l.Topics[2]), wordBig(data, 0), ts)
 	}
+}
+
+// assetUSD prices a raw amount of a quote asset or of a launched token (at its
+// last observed price; launched tokens have 18 decimals). Caller holds s.mu.
+func (c *collector) assetUSD(asset string, raw *big.Int, ts int64) float64 {
+	if t := c.state.Tokens[asset]; t != nil && c.state.Quotes[asset] == nil {
+		return units(raw, 18) * t.PriceUSD
+	}
+	return c.quoteUSD(asset, raw, ts)
 }
 
 func (c *collector) addVolume(tok *Token, raw *big.Int, ts int64) {

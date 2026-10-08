@@ -41,10 +41,14 @@ func main() {
 		for {
 			start := time.Now()
 			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Minute)
-			if err := c.sync(ctx); err != nil {
+			more, err := c.sync(ctx)
+			if err != nil {
 				log.Printf("sync: %v", err)
 			}
 			cancel()
+			if more && err == nil {
+				continue // backfill pending; the frontier was refreshed this round
+			}
 			if os.Getenv("SYNC_ONCE") != "" {
 				os.Exit(0)
 			}

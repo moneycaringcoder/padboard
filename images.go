@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -48,9 +49,9 @@ func (c *collector) fillImages(ctx context.Context) error {
 
 	// 1. On-chain metadata pointers, one batch per platform selector.
 	for _, p := range platforms {
-		sel := selMetaStk
-		if p.Key == sender.Key {
-			sel = selMetaSender
+		sel := p.MetaSelector
+		if sel == "" {
+			continue // the launch event carried the pointer
 		}
 		var addrs []string
 		for _, t := range pending {
@@ -78,12 +79,16 @@ func (c *collector) fillImages(ctx context.Context) error {
 	sem := make(chan struct{}, 8)
 	for _, t := range pending {
 		s.mu.RLock()
-		uri := t.MetaURI
+		uri, addr := t.MetaURI, t.Address
 		s.mu.RUnlock()
+		api := platformByKey(t.Platform).ImageAPI
 		sem <- struct{}{}
 		wg.Go(func() {
 			defer func() { <-sem }()
 			img := resolveImage(ctx, c.prices.http, uri)
+			if img == "" && api != "" {
+				img = resolveImage(ctx, c.prices.http, fmt.Sprintf(api, addr))
+			}
 			if img == "" {
 				img = "-"
 			} else {

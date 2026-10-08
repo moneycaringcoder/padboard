@@ -1,9 +1,9 @@
 {{template "head" .}}
-<main>
+<main id="main">
 <header class="page">
   <h1>Overview</h1>
   {{if not .Empty}}<div class="seg" id="range">
-    <button data-r="24h">24h</button><button data-r="7d" class="on">7d</button><button data-r="30d">30d</button><button data-r="all">All</button>
+    <button data-r="24h">24h</button><button data-r="7d">7d</button><button data-r="30d">30d</button><button data-r="all">All</button>
   </div>{{end}}
   {{template "status" .}}
 </header>
@@ -11,13 +11,63 @@
 <p class="muted">First sync is reading mainnet logs — refresh in a minute.</p>
 {{else}}
 
+<!-- Leaderboard: every launchpad, follows the range toggle; dominance donut on the right -->
+<section class="card board">
+  <div class="board-main">
+  <div class="board-head">
+    <h3>Launchpads</h3>
+    {{range .Board}}<small class="rl r-{{.Key}}">{{if eq .Key "all"}}All time{{else}}Last {{.Label}}{{end}}, ranked by volume</small>{{end}}
+  </div>
+  {{range .Board}}
+  <table class="lb r-{{.Key}}">
+    <thead><tr>
+      <th class="rk">#</th><th>Launchpad</th><th class="r">Volume</th><th class="sh">Share</th>
+      <th class="r m">Launches</th><th class="r l">Trades</th><th class="r">Fees</th><th class="r l">Revenue</th><th class="sp m">Volume, 30 days</th>
+    </tr></thead>
+    <tbody>
+    {{range $i, $r := .Rows}}
+    <tr class="p{{.Idx}}">
+      <td class="rk">{{inc $i}}</td>
+      <td><a class="lp" href="{{.Href}}"><img src="{{.Logo}}" alt=""><span><b>{{.Name}}</b>{{if lt .Progress 100.0}}<small><i class="sync">indexing · {{pct .Progress}}</i></small>{{end}}</span></a></td>
+      <td class="r num"><b>{{usd .Stats.Volume}}</b>{{if .Stats.HasDelta}}<small>{{delta .Stats.DVolume}}</small>{{end}}</td>
+      <td class="sh"><span class="sbar"><i style="width:{{printf "%.1f" .Share}}%"></i></span><small>{{pct .Share}}</small></td>
+      <td class="r num m">{{k .Stats.Launches}}{{if .Stats.HasDelta}}<small>{{delta .Stats.DLaunches}}</small>{{end}}</td>
+      <td class="r num l">{{k .Stats.Trades}}{{if .Stats.HasDelta}}<small>{{delta .Stats.DTrades}}</small>{{end}}</td>
+      <td class="r num">{{usd .Stats.Fees}}{{if .Stats.HasDelta}}<small>{{delta .Stats.DFees}}</small>{{end}}</td>
+      <td class="r num l">{{usd .Stats.Protocol}}{{if .Stats.HasDelta}}<small>{{delta .Stats.DProtocol}}</small>{{end}}</td>
+      <td class="sp m">{{.Spark}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+    <tfoot><tr>
+      <td class="rk"></td><td class="tot">All launchpads</td><td class="r num"><b>{{usd .Total.Volume}}</b></td><td class="sh"></td>
+      <td class="r num m">{{k .Total.Launches}}</td><td class="r num l">{{k .Total.Trades}}</td><td class="r num">{{usd .Total.Fees}}</td>
+      <td class="r num l">{{usd .Total.Protocol}}</td><td class="sp m"></td>
+    </tr></tfoot>
+  </table>
+  {{end}}
+  </div>
+  <aside class="dom">
+    <h3>Volume dominance</h3>
+    {{range .Board}}
+    <figure class="dn r-{{.Key}}">
+      {{.Donut}}
+      <figcaption>{{range .Rows}}<span class="p{{.Idx}}"><i></i>{{.Name}}<b>{{pct .Share}}</b></span>{{end}}</figcaption>
+    </figure>
+    {{end}}
+  </aside>
+</section>
+
+<!-- Any two, side by side -->
+<h2 class="sect" id="cmp">Side by side</h2>
 <div class="cols">
 {{range .Columns}}
 <section class="col p{{.Idx}}">{{$c := .}}
   <header class="pad-head">
     <img class="plogo" src="{{.Logo}}" alt="">
-    <h2>{{.Name}}</h2>
-    <a href="{{.Site}}" target="_blank" rel="noopener">{{.Site}} ↗</a>
+    <div class="pn"><h2>{{.Name}}</h2><a href="{{.Site}}" target="_blank" rel="noopener">{{host .Site}} ↗</a></div>
+    {{if lt .Progress 100.0}}<span class="sync">indexing {{pct .Progress}}</span>{{end}}
+    <nav class="pick" aria-label="Compare another launchpad">{{range .Pick}}<a href="{{.Href}}" class="p{{.Idx}}{{if .On}} on{{end}}" data-tip="{{.Name}}" aria-label="{{.Name}}"><img src="{{.Logo}}" alt=""></a>{{end}}</nav>
   </header>
 
   <!-- Range stats -->
@@ -85,16 +135,17 @@
     <p class="cap">Where the fees went, all time</p>
     {{template "segbar" .FeeSplit}}
     <table class="months">
-      <thead><tr><th>Month</th><th class="r">Fees</th><th class="r">Creators</th><th class="r">Holders</th><th class="r">Protocol</th><th class="r">Launch fees</th></tr></thead>
+      <thead><tr><th>Month</th><th class="r">Fees</th><th class="r">Creators</th>{{if .HasHolders}}<th class="r">Holders</th>{{end}}{{if .HasPartners}}<th class="r">Partners</th>{{end}}<th class="r">Protocol</th>{{if .HasLaunchFee}}<th class="r">Launch fees</th>{{end}}</tr></thead>
       <tbody>
-      {{range .Months}}<tr><td>{{.Label}}</td><td class="r">{{usd .Fees}}</td><td class="r">{{usd .Creators}}</td><td class="r">{{usd .Holders}}</td><td class="r">{{usd .Protocol}}</td><td class="r">{{usd .LaunchFees}}</td></tr>{{end}}
+      {{range .Months}}<tr><td>{{.Label}}</td><td class="r">{{usd .Fees}}</td><td class="r">{{usd .Creators}}</td>{{if $c.HasHolders}}<td class="r">{{usd .Holders}}</td>{{end}}{{if $c.HasPartners}}<td class="r">{{usd .Partners}}</td>{{end}}<td class="r">{{usd .Protocol}}</td>{{if $c.HasLaunchFee}}<td class="r">{{usd .LaunchFees}}</td>{{end}}</tr>{{end}}
       </tbody>
     </table>
     <p class="note">{{.FeeNote}}</p>
   </div>
 
-  <!-- Token + all time -->
+  <!-- Platform token -->
   <div class="card">
+    {{if .Token.Symbol}}
     <h3 class="with-ico">{{icon .Token.Image .Token.Symbol}}${{.Token.Symbol}} buyback and burn</h3>
     {{if .Token.HasPrice}}
     <div class="trio">
@@ -109,6 +160,10 @@
     </div>
     {{else}}<p class="muted">No swaps observed for {{.Token.Symbol}} yet.</p>{{end}}
     <p class="note">Burned is the balance at 0x…dEaD read at the last sync; price is the last swap on the {{.Token.Symbol}} pool.</p>
+    {{else}}
+    <h3>No platform token</h3>
+    <p class="muted">{{.Name}} has no tradable platform token on Ethereum, so there is no buyback, burn or valuation to track. Protocol revenue above is what the contracts route to the platform.</p>
+    {{end}}
   </div>
 
   <div class="card">
@@ -124,7 +179,7 @@
       {{range .Milestones}}<span>{{.}}</span>{{end}}
       <span>{{k .Tokens}} tokens launched</span>
       <span>{{k .All.Trades}} trades</span>
-      {{if ne .Key "stockereum"}}<span>{{.All.Graduations}} graduated</span>{{end}}
+      {{if .HasGraduation}}<span>{{.All.Graduations}} graduated</span>{{end}}
     </p>
     <p class="note">{{.GraduationNote}} {{pct .UnpricedPct}} of swaps have no USD price for their quote asset; {{pct .SpotPct}} are priced at spot rather than hourly.</p>
   </div>
@@ -138,18 +193,47 @@
 {{template "dock" .}}
 
 <script>
-document.getElementById('range')?.addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  document.body.dataset.range = b.dataset.r;
-  for (const x of b.parentNode.children) x.classList.toggle('on', x === b);
+document.addEventListener('click', e => {
+  const r = e.target.closest('#range button');
+  if (r) {
+    document.body.dataset.range = r.dataset.r;
+    try { localStorage.setItem('range', r.dataset.r); } catch {}
+    return;
+  }
+  const c = e.target.closest('.chart-card button[data-c]');
+  if (c) {
+    c.closest('.chart-card').dataset.chart = c.dataset.c;
+    for (const x of c.parentNode.children) x.classList.toggle('on', x === c);
+  }
 });
-for (const card of document.querySelectorAll('.chart-card')) {
-  card.addEventListener('click', e => {
-    const b = e.target.closest('button[data-c]'); if (!b) return;
-    card.dataset.chart = b.dataset.c;
-    for (const x of b.parentNode.children) x.classList.toggle('on', x === b);
-  });
-}
+// Live: re-fetch every minute while the tab is visible and swap the ticker and
+// <main> in place, keeping each column's chart tab; unchanged pages (same ETag)
+// are skipped. Hidden tabs catch up as soon as they are shown.
+let etag = '', last = Date.now();
+const refresh = async () => {
+  last = Date.now();
+  try {
+    const res = await fetch(location.href, {cache: 'no-cache'});
+    const tag = res.headers.get('etag');
+    if (!res.ok || (tag && tag === etag)) return;
+    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+    const main = doc.getElementById('main');
+    if (!main) return;
+    const tabs = [...document.querySelectorAll('.chart-card')].map(c => c.dataset.chart);
+    main.querySelectorAll('.chart-card').forEach((c, i) => {
+      if (!tabs[i]) return;
+      c.dataset.chart = tabs[i];
+      c.querySelectorAll('button[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === tabs[i]));
+    });
+    main.style.animation = 'none';
+    document.getElementById('main').replaceWith(main);
+    const tk = doc.getElementById('ticker');
+    if (tk) document.getElementById('ticker')?.replaceWith(tk);
+    etag = tag;
+  } catch {}
+};
+setInterval(() => { if (!document.hidden) refresh(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - last >= 60000) refresh(); });
 </script>
 </body>
 </html>

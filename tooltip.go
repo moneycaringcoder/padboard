@@ -6,9 +6,9 @@ import (
 )
 
 // chartMeta is embedded on each chart <svg> so the client can resolve the
-// hovered bucket from the cursor's x position and show every series at once.
+// hovered bucket from the cursor's x position.
 type chartMeta struct {
-	Mode   string        `json:"mode"` // "bars" (bucket centres) or "lines" (points)
+	Mode   string        `json:"mode"` // "bars": buckets are evenly spaced columns
 	X0     float64       `json:"x0"`   // plot left edge, viewBox units
 	W      float64       `json:"w"`    // plot width, viewBox units
 	Labels []string      `json:"labels"`
@@ -17,7 +17,7 @@ type chartMeta struct {
 
 type chartSeries struct {
 	Name   string   `json:"name"`
-	Class  string   `json:"cls"`
+	Class  string   `json:"cls"`    // pN: the platform colour of the tooltip dot
 	Values []string `json:"values"` // pre-formatted; "" = no data
 }
 
@@ -34,16 +34,4 @@ func formatSeries(vals []float64, fy func(float64) string) []string {
 		}
 	}
 	return out
-}
-
-// overlayMeta builds chart metadata for the two-platform overlay charts.
-func overlayMeta(mode string, plotW float64, labels []string, series [][]float64, fy func(float64) string) template.HTMLAttr {
-	m := chartMeta{Mode: mode, X0: 0, W: plotW, Labels: labels}
-	for i, s := range series {
-		if s == nil {
-			continue
-		}
-		m.Series = append(m.Series, chartSeries{Name: platforms[i].Name, Class: "s" + string(rune('1'+i)), Values: formatSeries(s, fy)})
-	}
-	return chartAttr(m)
 }

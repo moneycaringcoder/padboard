@@ -4,56 +4,57 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="view-transition" content="same-origin">
-<title>{{.Title}} · padboard — Stockereum vs Sender launchpad analytics</title>
-<meta name="description" content="Stockereum and Sender launchpad analytics side by side: volume, launches, fees, protocol revenue and platform-token valuation, read from Ethereum mainnet and refreshed every 5 minutes.">
+<title>{{.Title}} · padboard — Ethereum launchpad analytics</title>
+<meta name="description" content="Stockereum, Sender, Stroid and Clanker launchpad analytics side by side: volume, launches, fees, protocol revenue and platform-token valuation, read from Ethereum mainnet and refreshed every 5 minutes.">
 <link rel="canonical" href="{{.Origin}}{{.Path}}">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <meta name="theme-color" content="#0c0d10">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="padboard">
 <meta property="og:title" content="{{.Title}} · padboard">
-<meta property="og:description" content="Launchpads, side by side. Stockereum vs Sender on Ethereum mainnet — volume, launches, fees, valuation.">
+<meta property="og:description" content="Launchpads, side by side. Stockereum, Sender, Stroid and Clanker on Ethereum mainnet — volume, launches, fees, valuation.">
 <meta property="og:url" content="{{.Origin}}{{.Path}}">
 <meta property="og:image" content="{{.Origin}}/static/og.svg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@0xmcc">
 <meta name="twitter:creator" content="@0xmcc">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"padboard","url":"{{.Origin}}/","description":"Stockereum vs Sender launchpad analytics from Ethereum mainnet.","author":{"@type":"Person","name":"0xmcc","url":"https://x.com/0xmcc"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"padboard","url":"{{.Origin}}/","description":"Ethereum launchpad analytics from mainnet logs: Stockereum, Sender, Stroid, Clanker.","author":{"@type":"Person","name":"0xmcc","url":"https://x.com/0xmcc"}}</script>
 <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
 </head>
 <body data-range="7d" data-page="{{.Page}}">
-{{if .Ticker}}
-<div class="ticker">
+<script>try { const r = localStorage.getItem('range'); if (r) document.body.dataset.range = r; } catch {}</script>
+{{template "ticker" .}}
+{{end}}
+
+{{define "ticker"}}{{if .Ticker}}
+<div class="ticker" id="ticker" style="--n:{{len .Ticker}}">
   <div class="tk-label">Today</div>
   {{range .Ticker}}
-  <div class="tk p{{.Idx}}">
-    <img src="{{.Logo}}" alt=""><b>{{.Name}}</b>
-    <span><em class="{{trend .Today.DVolume}}">{{usd .Today.Volume}}</em> volume</span>
-    <span><em class="{{trend .Today.DTrades}}">{{k .Today.Trades}}</em> trades</span>
-    <span><em class="{{trend .Today.DLaunches}}">{{k .Today.Launches}}</em> launches</span>
-    <span><em class="{{trend .Today.DFees}}">{{usd .Today.Fees}}</em> fees</span>
-  </div>
+  <a class="tk p{{.Idx}}" href="/?a={{.Key}}#cmp" title="{{.Name}} today: {{usd .Today.Volume}} volume · {{k .Today.Trades}} trades · {{k .Today.Launches}} launches · {{usd .Today.Fees}} fees">
+    <img src="{{.Logo}}" alt=""><b class="nm">{{.Name}}</b>
+    <span><em class="{{trend .Today.DVolume}}">{{usd .Today.Volume}}</em> vol</span>
+    <span class="tl"><em class="{{trend .Today.DLaunches}}">{{k .Today.Launches}}</em> launches</span>
+    <span class="tf"><em class="{{trend .Today.DFees}}">{{usd .Today.Fees}}</em> fees</span>
+  </a>
   {{end}}
 </div>
-{{end}}
-{{end}}
+{{end}}{{end}}
 
 {{define "llms.txt"}}# padboard
 
-> Launchpads, side by side. Stockereum vs Sender — Ethereum mainnet launchpad analytics (volume, launches, trades, fees, protocol revenue, platform-token price/FDV/burn), read directly from chain logs and refreshed every 5 minutes.
+> Launchpads, side by side. Stockereum, Sender, Stroid and Clanker — Ethereum mainnet launchpad analytics (volume, launches, trades, fees, protocol revenue, platform-token price/FDV/burn), read directly from chain logs and refreshed every 5 minutes.
 
-Both platforms launch tokens into Uniswap v4 pools. Volume is the quote-side delta of each Swap on a launched pool; ETH/WETH quotes are priced hourly, other quotes at snapshot spot. Fees are what the contracts credited or collected (Stockereum FeeEscrow.Credited, Sender locker FeesCollected / hook FeeDistributed), not volume x rate. Token prices derive from the pool sqrtPriceX96 after the latest swap; FDV = price x totalSupply().
+Every platform launches tokens into Uniswap v4 pools. Volume is the quote-side delta of each Swap on a launched pool; ETH/WETH quotes are priced hourly, other quotes at snapshot spot. Fees are what the contracts credited or collected (Stockereum FeeEscrow.Credited, Sender locker FeesCollected / hook FeeDistributed, Stroid hook FeeAccrued / PartnerFeeAccrued, Clanker locker ClaimedRewards / hook ClaimProtocolFees), not volume x rate. Clanker fees count only when collected from the locked position. Token prices derive from the pool sqrtPriceX96 after the latest swap; FDV = price x totalSupply().
 
 ## Pages
-- {{.Origin}}/ : Overview — two columns (Stockereum | Sender), 24h/7d/30d/all windows, charts, fee routing, buyback & burn, top coins
-- {{.Origin}}/charts : both platforms overlaid in every chart, dominance bands, FDV / 7d fees
+- {{.Origin}}/ : Overview — leaderboard of every launchpad for 24h/7d/30d/all, then any two side by side (?a=&b=): charts, fee routing, buyback & burn, top coins
 - {{.Origin}}/tokens : every launched token, sortable, 100 per page
 - {{.Origin}}/api : API documentation
 
 ## JSON API (no auth, CORS open, 60 requests/min per IP)
-- {{.Origin}}/api/v1/summary : per-platform today / 24h / 7d / 30d / all windows and platform token stats
+- {{.Origin}}/api/v1/summary : per-platform today / 24h / 7d / 30d / all windows, indexing progress and platform token stats
 - {{.Origin}}/api/v1/daily?interval=day|hour : time series per platform
-- {{.Origin}}/api/v1/tokens?pad=stockereum|sender&sort=volume|fdv|price|trades|new&q=&page= : token list
+- {{.Origin}}/api/v1/tokens?pad=stockereum|sender|stroid|clanker&sort=volume|fdv|price|trades|new&q=&page= : token list
 - {{.Origin}}/api/v1/tokens/{address} : one token
 - {{.Origin}}/api/snapshot.json : raw snapshot
 
@@ -67,8 +68,6 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
   <a href="/" {{if eq .Page "overview"}}class="on"{{end}}>
     <svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>Overview</a>
   <span class="group">
-    <a href="/charts" {{if eq .Page "charts"}}class="on"{{end}}>
-      <svg viewBox="0 0 24 24"><path d="M4 20V10"/><path d="M9 20V4"/><path d="M14 20v-8"/><path d="M19 20V7"/></svg>Charts</a>
     <a href="/tokens" {{if eq .Page "tokens"}}class="on"{{end}}>
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>Tokens</a>
     <a href="/api" {{if eq .Page "api"}}class="on"{{end}}>
@@ -94,18 +93,17 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
   document.addEventListener('mousemove', e => {
     const svg = e.target.closest ? e.target.closest('svg[data-chart]') : null;
     if (svg) {
-      // Resolve the bucket under the cursor from x alone; show every series.
+      // Resolve the bucket under the cursor from x alone.
       let m = metas.get(svg);
       if (!m) metas.set(svg, m = JSON.parse(svg.dataset.chart));
       const vb = svg.viewBox.baseVal, r = svg.getBoundingClientRect();
       const ux = (e.clientX - r.left) / r.width * vb.width;
       const n = m.labels.length;
-      let j = m.mode === 'lines' ? Math.round((ux - m.x0) / (m.w / (n - 1))) : Math.floor((ux - m.x0) / (m.w / n));
-      j = Math.max(0, Math.min(n - 1, j));
+      const j = Math.max(0, Math.min(n - 1, Math.floor((ux - m.x0) / (m.w / n))));
       if (svg !== curSvg) { leaveSvg(); curSvg = svg; xh = document.createElementNS(SVGNS, 'line'); xh.setAttribute('class', 'xh'); svg.appendChild(xh); }
       if (j !== curJ) {
         curJ = j;
-        const cx = m.mode === 'lines' ? m.x0 + m.w * j / (n - 1) : m.x0 + m.w * (j + 0.5) / n;
+        const cx = m.x0 + m.w * (j + 0.5) / n;
         xh.setAttribute('x1', cx); xh.setAttribute('x2', cx); xh.setAttribute('y1', 0); xh.setAttribute('y2', vb.height - 22);
         svg.querySelectorAll('.hot').forEach(h => h.classList.remove('hot'));
         svg.querySelectorAll(`g.bar[data-j="${j}"]`).forEach(g => g.classList.add('hot'));
@@ -117,6 +115,8 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
       return;
     }
     if (curSvg) leaveSvg();
+    const el = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (el) { tip.textContent = el.dataset.tip; tip.hidden = false; place(e); } else tip.hidden = true;
   });
   document.addEventListener('mouseleave', leaveSvg);
 })();

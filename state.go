@@ -5,11 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strconv"
-	"strings"
 	"sync"
-	"time"
 )
 
 // Token is one launched market.
@@ -61,6 +57,7 @@ type Agg struct {
 	CreatorUSD  float64 `json:"creatorUsd"`   // accrued to creators
 	HolderUSD   float64 `json:"holderUsd"`    // accrued to holder reward distributors
 	PlatformUSD float64 `json:"platformUsd"`  // accrued to protocol/treasury/burn
+	PartnerUSD  float64 `json:"partnerUsd"`   // accrued to third parties: partners, modules, interfaces
 	LaunchFees  float64 `json:"launchFeeUsd"` // launch fees paid to the platform
 	CreatorPaid float64 `json:"creatorPaid"`  // actually transferred to creators
 	TokenPrice  float64 `json:"tokenPrice"`   // platform token USD price, last swap in the hour (0 = none)
@@ -77,6 +74,7 @@ func (a *Agg) add(b *Agg) {
 	a.CreatorUSD += b.CreatorUSD
 	a.HolderUSD += b.HolderUSD
 	a.PlatformUSD += b.PlatformUSD
+	a.PartnerUSD += b.PartnerUSD
 	a.LaunchFees += b.LaunchFees
 	a.CreatorPaid += b.CreatorPaid
 	if b.TokenPrice != 0 {
@@ -86,13 +84,16 @@ func (a *Agg) add(b *Agg) {
 
 // State is the whole persisted snapshot; one JSON file, rewritten atomically.
 type State struct {
-	Head      uint64             `json:"head"`     // last processed block
+	Head      uint64             `json:"head"`     // every platform is processed up to here
 	HeadTime  int64              `json:"headTime"` // timestamp of Head
+	Heads     map[string]uint64  `json:"heads"`    // platform -> last processed block
+	Tip       uint64             `json:"tip"`      // safe chain head at the last sync
 	SyncedAt  int64              `json:"syncedAt"`
-	Tokens    map[string]*Token  `json:"tokens"`   // token address -> token
-	Pools     map[string]string  `json:"pools"`    // pool id -> token address
-	TokenIDs  map[string]string  `json:"tokenIds"` // Sender v1 position id -> token address
-	Holders   map[string]bool    `json:"holders"`  // Stockereum holder-distributor addresses
+	Done      map[string]bool    `json:"done,omitempty"` // one-off replays already applied
+	Tokens    map[string]*Token  `json:"tokens"`         // token address -> token
+	Pools     map[string]string  `json:"pools"`          // pool id -> token address
+	TokenIDs  map[string]string  `json:"tokenIds"`       // Sender v1 position id -> token address
+	Holders   map[string]bool    `json:"holders"`        // Stockereum holder-distributor addresses
 	Quotes    map[string]*Quote  `json:"quotes"`
 	EthHourly map[string]float64 `json:"ethHourly"` // hour unix -> ETH/USD
 	Hours     map[string]*Agg    `json:"hours"`     // "<platform>/<hour unix>" -> agg
@@ -107,7 +108,8 @@ func newState(path string) *State {
 	return &State{
 		Tokens: map[string]*Token{}, Pools: map[string]string{}, TokenIDs: map[string]string{},
 		Holders: map[string]bool{}, Quotes: map[string]*Quote{}, EthHourly: map[string]float64{},
-		Hours: map[string]*Agg{}, LaunchFee: map[string]float64{}, Burned: map[string]float64{}, path: path,
+		Hours: map[string]*Agg{}, LaunchFee: map[string]float64{}, Burned: map[string]float64{},
+		Heads: map[string]uint64{}, Done: map[string]bool{}, path: path,
 	}
 }
 
@@ -122,6 +124,10 @@ func loadState(path string) (*State, error) {
 	}
 	if err := json.Unmarshal(b, s); err != nil {
 		return nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+	// Snapshots from before per-platform cursors had one shared head.
+	if len(s.Heads) == 0 && s.Head > 0 {
+		s.Heads[stockereum.Key], s.Heads[sender.Key] = s.Head, s.Head
 	}
 	return s, nil
 }
@@ -180,29 +186,4 @@ func (s *State) priceQuote(quote string, amount float64, ts int64) (usd float64,
 		return 0, false
 	}
 	return amount * q.USD, true
-}
-
-func (s *State) hours() []int64 {
-	seen := map[int64]bool{}
-	for k := range s.Hours {
-		_, hs, _ := strings.Cut(k, "/")
-		h, err := strconv.ParseInt(hs, 10, 64)
-		if err != nil {
-			continue
-		}
-		seen[h] = true
-	}
-	out := make([]int64, 0, len(seen))
-	for h := range seen {
-		out = append(out, h)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-	return out
-}
-
-func (s *State) headAge() time.Duration {
-	if s.SyncedAt == 0 {
-		return 0
-	}
-	return time.Since(time.Unix(s.SyncedAt, 0)).Truncate(time.Second)
 }

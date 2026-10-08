@@ -6,7 +6,7 @@
     <input type="search" name="q" value="{{.Table.Query}}" placeholder="Search symbol, name or address">
     <div class="seg">
       <button type="submit" name="pad" value="" {{if eq .Table.Pad ""}}class="on"{{end}}>All</button>
-      {{range .Columns}}<button type="submit" name="pad" value="{{.Key}}" {{if eq $.Table.Pad .Key}}class="on"{{end}}><img src="{{.Logo}}" alt="">{{.Name}}</button>{{end}}
+      {{range .Pads}}<button type="submit" name="pad" value="{{.Key}}" class="p{{.Idx}}{{if eq $.Table.Pad .Key}} on{{end}}"><img src="{{.Logo}}" alt="">{{.Name}}</button>{{end}}
     </div>
     <input type="hidden" name="pad" value="{{.Table.Pad}}">
     <input type="hidden" name="sort" value="{{.Table.Sort}}">
@@ -35,14 +35,14 @@
     <tr>
       <td class="rk">{{.Rank}}</td>
       <td><a class="coin" href="https://etherscan.io/token/{{.Address}}" target="_blank" rel="noopener">{{icon .Image .Symbol}}<span><b>{{.Symbol}}</b><small>{{.Name}}</small></span></a></td>
-      <td><span class="pad-tag p{{if eq .Platform "stockereum"}}1{{else}}2{{end}}"><img src="{{$p.Logo}}" alt="">{{$p.Name}}</span></td>
+      <td><span class="pad-tag p{{$p.Idx}}"><img src="{{$p.Logo}}" alt="">{{$p.Name}}</span></td>
       <td><span class="pair">{{icon .QuoteLogo .QuoteSymbol}}{{.QuoteSymbol}}</span></td>
       <td class="r num">{{price .PriceUSD}}</td>
       <td class="r num">{{usd .FDV}}</td>
       <td class="r num"><b>{{usd .VolUSD}}</b></td>
       <td class="r num muted">{{k .Swaps}}</td>
       <td class="r muted">{{ago .Created}}</td>
-      <td class="r">{{if .Graduated}}<span class="st grad">graduated</span>{{else if eq .Platform "stockereum"}}<span class="st">open pool</span>{{else}}<span class="st bond">bonding</span>{{end}}</td>
+      <td class="r">{{if .Graduated}}<span class="st grad">graduated</span>{{else if $p.HasGraduation}}<span class="st bond">bonding</span>{{else}}<span class="st">open pool</span>{{end}}</td>
     </tr>
     {{end}}
     </tbody>
