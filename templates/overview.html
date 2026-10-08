@@ -79,17 +79,14 @@
   </aside>
 </section>
 
-<!-- Every launchpad on one chart: metric tabs, window from the range toggle -->
-<section class="card chart-card cmpc" data-chart="volume">
-  <div class="cmp-head">
-    <div class="cmp-tot">{{range $r := .Compare}}<div class="rblock r-{{.Key}}">{{range .Charts}}<div class="chart-total c-{{.Key}}"><b>{{.Total}}</b><small>{{.Label}}, {{$r.Label}}</small></div>{{end}}</div>{{end}}</div>
-    <div class="seg tabs">{{range (index .Compare 0).Charts}}<button data-c="{{.Key}}"{{if eq .Key "volume"}} class="on"{{end}}>{{.Label}}</button>{{end}}</div>
+<!-- Every launchpad on one chart: metric and totals/share tabs, window from the
+     range toggle. Only the default renders here; other views load as fragments. -->
+<section class="card cmpc" id="cmp">
+  <div class="cmp-tabs">
+    <div class="seg tabs" id="cmp-metric">{{range .Metrics}}<button data-m="{{.Key}}"{{if eq .Key "volume"}} class="on"{{end}}>{{.Label}}</button>{{end}}</div>
+    <div class="seg tabs" id="cmp-mode"><button data-mode="abs" class="on">Totals</button><button data-mode="share">Share</button></div>
   </div>
-  {{range .Compare}}<div class="rblock r-{{.Key}}">{{range .Charts}}
-  <div class="chart-body c-{{.Key}}">
-    <p class="clegend">{{range .Legend}}<span class="p{{.Idx}}"><img src="{{.Logo}}" alt="">{{.Name}}<b>{{.Text}}</b></span>{{end}}</p>
-    {{.SVG}}
-  </div>{{end}}</div>{{end}}
+  {{template "cmpfrag" .Chart}}
 </section>
 
 <!-- Detail cards: each picks its launchpad -->
@@ -193,20 +190,53 @@ const pickIn = (card, k) => {
     b.setAttribute('aria-pressed', b.dataset.k === k);
   });
 };
-// Range and metric buttons announce which one is selected.
+// Range and chart buttons announce which one is selected.
 const syncPressed = () => {
   document.querySelectorAll('#range button').forEach(b => b.setAttribute('aria-pressed', b.dataset.r === document.body.dataset.range));
-  document.querySelectorAll('.chart-card button[data-c]').forEach(b => b.setAttribute('aria-pressed', b.classList.contains('on')));
+  document.querySelectorAll('#cmp .tabs button').forEach(b => b.setAttribute('aria-pressed', b.classList.contains('on')));
 };
 const applyPicks = root => root.querySelectorAll('.pickable').forEach(c =>
   pickIn(c, picks[c.dataset.card] || c.querySelector('[data-v]:not([hidden])').dataset.v));
 applyPicks(document);
+// Comparison chart: the page carries one view (7d volume totals); any other
+// range × metric × totals/share loads once as a fragment and is kept until the
+// next live refresh.
+let cmp = {};
+try { cmp = JSON.parse(localStorage.getItem('cmp') || '{}'); } catch {}
+cmp.metric ||= 'volume'; cmp.mode ||= 'abs';
+const frags = new Map();
+let chartSeq = 0;
+const chartKey = () => `${document.body.dataset.range}|${cmp.metric}|${cmp.mode}`;
+const fetchFrag = async key => {
+  if (frags.has(key)) return frags.get(key);
+  const [r, m, mode] = key.split('|');
+  try {
+    const res = await fetch(`/chart?range=${r}&metric=${m}&mode=${mode}`);
+    if (!res.ok) return null;
+    const html = await res.text();
+    frags.set(key, html);
+    return html;
+  } catch { return null; }
+};
+const loadChart = async () => {
+  const card = document.getElementById('cmp');
+  if (!card) return;
+  card.querySelectorAll('#cmp-metric [data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === cmp.metric));
+  card.querySelectorAll('#cmp-mode [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === cmp.mode));
+  syncPressed();
+  const key = chartKey(), cur = card.querySelector('.cmp-frag');
+  frags.set(cur.dataset.key, cur.outerHTML);
+  if (cur.dataset.key === key) return;
+  const seq = ++chartSeq, html = await fetchFrag(key);
+  if (html && seq === chartSeq) card.querySelector('.cmp-frag').outerHTML = html;
+};
+loadChart();
 document.addEventListener('click', e => {
   const r = e.target.closest('#range button');
   if (r) {
     document.body.dataset.range = r.dataset.r;
     try { localStorage.setItem('range', r.dataset.r); } catch {}
-    syncPressed();
+    loadChart();
     return;
   }
   const p = e.target.closest('.pickable .pick [data-k]');
@@ -217,17 +247,18 @@ document.addEventListener('click', e => {
     try { localStorage.setItem('picks', JSON.stringify(picks)); } catch {}
     return;
   }
-  const c = e.target.closest('.chart-card button[data-c]');
+  const c = e.target.closest('#cmp .tabs button');
   if (c) {
-    c.closest('.chart-card').dataset.chart = c.dataset.c;
-    for (const x of c.parentNode.children) x.classList.toggle('on', x === c);
-    syncPressed();
+    if (c.dataset.m) cmp.metric = c.dataset.m;
+    if (c.dataset.mode) cmp.mode = c.dataset.mode;
+    try { localStorage.setItem('cmp', JSON.stringify(cmp)); } catch {}
+    loadChart();
   }
 });
 // Live: re-fetch every minute while the tab is visible and swap the ticker and
 // <main> in place, keeping chart tabs and picks; unchanged pages (same ETag)
 // are skipped. Hidden tabs catch up as soon as they are shown.
-const NUMS = '.big b, .lb .num > b, .chart-total b, .clegend b, .dn figcaption b, .trio b, .ptok .num > b, .tk em, .ethpill b';
+const NUMS = '.big b, .lb .num > b, .dn figcaption b, .trio b, .ptok .num > b, .tk em, .ethpill b';
 const value = s => {
   const m = s.replace(/[$,+%×]/g, '').match(/-?[\d.]+/);
   return m ? parseFloat(m[0]) * ({K: 1e3, M: 1e6, B: 1e9}[(s.match(/[KMB]/) || [''])[0]] || 1) : NaN;
@@ -252,13 +283,14 @@ const refresh = async () => {
     const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
     const main = doc.getElementById('main');
     if (!main) return;
-    const tabs = [...document.querySelectorAll('.chart-card')].map(c => c.dataset.chart);
-    main.querySelectorAll('.chart-card').forEach((c, i) => {
-      if (!tabs[i]) return;
-      c.dataset.chart = tabs[i];
-      c.querySelectorAll('button[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === tabs[i]));
-    });
     applyPicks(main);
+    // Swap in fresh data for the chart view on screen before the page changes.
+    frags.clear();
+    const nf = main.querySelector('.cmp-frag');
+    if (nf && nf.dataset.key !== chartKey()) {
+      const html = await fetchFrag(chartKey());
+      if (html) nf.outerHTML = html;
+    }
     // Numbers that moved since the last minute get a brief up/down tint.
     tint(document.getElementById('main'), main);
     const tk = doc.getElementById('ticker'), old = document.getElementById('ticker');
@@ -269,7 +301,7 @@ const refresh = async () => {
     if (tk && old) { calm(tk); old.replaceWith(tk); }
     const ep = doc.getElementById('ethpill'), oldEp = document.getElementById('ethpill');
     if (ep && oldEp) { tint(oldEp, ep); oldEp.replaceWith(ep); }
-    syncPressed();
+    loadChart();
     etag = tag;
   } catch {}
 };
@@ -280,6 +312,12 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && Da
 </html>
 
 {{define "pickpads"}}{{range .}}<button data-k="{{.Key}}" class="p{{.Idx}}" data-tip="{{.Name}}" aria-label="{{.Name}}"><img src="{{.Logo}}" alt=""></button>{{end}}{{end}}
+
+{{define "cmpfrag"}}<div class="cmp-frag" data-key="{{.Range}}|{{.Key}}|{{if .Share}}share{{else}}abs{{end}}">
+  <div class="chart-total"><b>{{.Total}}</b><small>{{.Label}}{{if .Share}} share{{end}}, {{.RangeLabel}}</small></div>
+  <p class="clegend">{{range .Legend}}<span class="p{{.Idx}}"><img src="{{.Logo}}" alt="">{{.Name}}<b>{{.Text}}</b></span>{{end}}</p>
+  {{.SVG}}
+</div>{{end}}
 
 {{define "coins"}}
 <div class="scroll">

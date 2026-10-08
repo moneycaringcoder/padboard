@@ -14,7 +14,10 @@
 <meta property="og:title" content="{{.Title}} · padboard">
 <meta property="og:description" content="Launchpads, side by side. Stockereum, Sender, Stroid and Clanker on Ethereum mainnet — volume, launches, fees, valuation.">
 <meta property="og:url" content="{{.Origin}}{{.Path}}">
-<meta property="og:image" content="{{.Origin}}/static/og.svg">
+<meta property="og:image" content="{{.Origin}}/static/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="padboard: launchpads side by side">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@0xmcc">
 <meta name="twitter:creator" content="@0xmcc">
@@ -28,13 +31,13 @@
 
 {{define "ticker"}}{{if .Ticker}}
 <div class="ticker" id="ticker" style="--n:{{len .Ticker}}">
-  <div class="tk-label">Today</div>
+  <div class="tk-label">24h</div>
   {{range .Ticker}}
-  <a class="tk p{{.Idx}}" href="/#pad-{{.Key}}" title="{{.Name}} today: {{usd .Today.Volume}} volume · {{k .Today.Trades}} trades · {{k .Today.Launches}} launches · {{usd .Today.Fees}} fees">
+  <a class="tk p{{.Idx}}" href="/#pad-{{.Key}}" title="{{.Name}}, last 24 hours: {{usd .Day.Volume}} volume · {{k .Day.Trades}} trades · {{k .Day.Launches}} launches · {{usd .Day.Fees}} fees">
     <span class="tn"><img src="{{.Logo}}" alt=""><b class="nm">{{.Name}}</b></span>
-    <span><em class="{{trend .Today.DVolume}}">{{usd .Today.Volume}}</em> vol</span>
-    <span class="tl"><em class="{{trend .Today.DLaunches}}">{{k .Today.Launches}}</em> launches</span>
-    <span class="tf"><em class="{{trend .Today.DFees}}">{{usd .Today.Fees}}</em> fees</span>
+    <span><em class="{{trend .Day.DVolume}}">{{usd .Day.Volume}}</em> vol</span>
+    <span class="tl"><em class="{{trend .Day.DLaunches}}">{{k .Day.Launches}}</em> launches</span>
+    <span class="tf"><em class="{{trend .Day.DFees}}">{{usd .Day.Fees}}</em> fees</span>
   </a>
   {{end}}
 </div>

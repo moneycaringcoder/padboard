@@ -199,6 +199,18 @@ func (c *collector) routes() http.Handler {
 	}
 	mux.Handle("/{$}", page("overview.html", func(*http.Request) pageView { return buildView(c.state) }))
 	mux.Handle("/charts", http.RedirectHandler("/", http.StatusMovedPermanently))
+	// One comparison chart (window × metric × totals/share) as an HTML fragment;
+	// the overview renders its default inline and fetches the rest on demand.
+	mux.Handle("/chart", rc.wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		c.state.mu.RLock()
+		cc := comparison(hoursByPad(c.state), time.Now().UTC(), q.Get("range"), q.Get("metric"), q.Get("mode") == "share")
+		c.state.mu.RUnlock()
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := tmpl.ExecuteTemplate(w, "cmpfrag", cc); err != nil {
+			http.Error(w, err.Error(), 500)
+		}
+	})))
 	mux.Handle("/tokens", page("tokens.html", func(r *http.Request) pageView { return buildTokens(c.state, r) }))
 	mux.Handle("/api", page("api.html", func(r *http.Request) pageView {
 		c.state.mu.RLock()

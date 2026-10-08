@@ -45,6 +45,7 @@
       <td class="r">{{if .Graduated}}<span class="st grad">graduated</span>{{else if $p.HasGraduation}}<span class="st bond">bonding</span>{{else}}<span class="st">open pool</span>{{end}}</td>
     </tr>
     {{end}}
+    {{if not .Table.Rows}}<tr><td colspan="10" class="empty">{{if .Table.Query}}No tokens match “{{.Table.Query}}”. <a href="/tokens{{if .Table.Pad}}?pad={{.Table.Pad}}{{end}}">Clear search</a>{{else}}No tokens launched here yet.{{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>

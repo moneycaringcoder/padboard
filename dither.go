@@ -28,12 +28,15 @@ func (d dither) defs(pads []*platform) string {
 }
 
 // seg emits one platform's slice of a stacked bar: dithered body with a crisp
-// cap. Slices thinner than the 4-unit pattern read as noise, so they are solid.
+// cap. Slices thinner than the 4-unit pattern read as noise, so they are
+// solid, and slivers get no cap (a cap would overstate them).
 func (d dither) seg(b *strings.Builder, x, y, w, h float64, p *platform) {
 	fill := fmt.Sprintf(`fill:url(#%s-p%d)`, d.id, p.Idx)
 	if w < 5 || h < 3 {
 		fill = fmt.Sprintf(`fill:var(--c%d)`, p.Idx)
 	}
-	fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" style="%s"/><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="cap sp p%d"/>`,
-		x, y, w, h, fill, x, y, w, min(1.5, h), p.Idx)
+	fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" style="%s"/>`, x, y, w, h, fill)
+	if h >= 3 {
+		fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="%.1f" height="1.5" class="cap sp p%d"/>`, x, y, w, p.Idx)
+	}
 }
