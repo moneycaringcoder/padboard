@@ -1,24 +1,30 @@
 {{template "head" .}}
-<main>
+<main id="main">
 <header class="page">
   <h1>Tokens</h1>
   <form class="filters" method="get">
     <input type="search" name="q" value="{{.Table.Query}}" placeholder="Search symbol, name or address">
-    <div class="seg">
-      <button type="submit" name="pad" value="" {{if eq .Table.Pad ""}}class="on"{{end}}>All</button>
-      {{range .Pads}}<button type="submit" name="pad" value="{{.Key}}" class="p{{.Idx}}{{if eq $.Table.Pad .Key}} on{{end}}"><img src="{{.Logo}}" alt="">{{.Name}}</button>{{end}}
-    </div>
+    <nav class="pick">
+      <button type="submit" name="pad" value="" class="all{{if eq .Table.Pad ""}} on{{end}}">All</button>
+      {{range .Pads}}<button type="submit" name="pad" value="{{.Key}}" class="p{{.Idx}}{{if eq $.Table.Pad .Key}} on{{end}}" data-tip="{{.Name}}" aria-label="{{.Name}}" aria-pressed="{{eq $.Table.Pad .Key}}"><img src="{{.Logo}}" alt=""></button>{{end}}
+    </nav>
     <input type="hidden" name="pad" value="{{.Table.Pad}}">
     <input type="hidden" name="sort" value="{{.Table.Sort}}">
   </form>
   {{template "status" .}}
 </header>
 {{if .Empty}}
-<p class="muted">First sync is reading mainnet logs — refresh in a minute.</p>
+<p class="empty">First sync is reading mainnet logs — refresh in a minute.</p>
 {{else}}
 {{$q := printf "pad=%s&q=%s" .Table.Pad .Table.Query}}
 {{$s := .Table.Sort}}
 <div class="card table">
+  {{with .Table}}
+  <header class="ph sum">
+    <h3>{{if .Query}}Matching “{{.Query}}”{{else}}Tokens{{end}}, {{.Label}}</h3>
+    <small>{{num .Total}} tokens · {{usd .VolUSD}} volume · {{k .Swaps}} trades{{if .Graduated}} · {{num .Graduated}} graduated{{end}}</small>
+  </header>
+  {{end}}
   <div class="scroll">
   <table class="coins all">
     <thead><tr>

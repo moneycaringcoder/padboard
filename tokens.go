@@ -18,6 +18,11 @@ type tokenTable struct {
 	Total      int
 	Page, Last int
 	Pages      []int // page numbers to render
+	// Sums over every row the filter selects, not just this page.
+	VolUSD    float64
+	Swaps     int
+	Graduated int
+	Label     string // "all launchpads" or the pad's name
 }
 
 var tokenSorts = map[string]func(a, b *tokenRow) bool{
@@ -68,6 +73,17 @@ func queryTokens(s *State, q map[string][]string) tokenTable {
 	less := tokenSorts[t.Sort]
 	sort.Slice(t.Rows, func(i, j int) bool { return less(&t.Rows[i], &t.Rows[j]) })
 	t.Total = len(t.Rows)
+	t.Label = "all launchpads"
+	if p := platformByKey(t.Pad); p != nil {
+		t.Label = p.Name
+	}
+	for i := range t.Rows {
+		t.VolUSD += t.Rows[i].VolUSD
+		t.Swaps += t.Rows[i].Swaps
+		if t.Rows[i].Graduated != 0 {
+			t.Graduated++
+		}
+	}
 	t.Last = max(1, (t.Total+tokensPerPage-1)/tokensPerPage)
 	t.Page = min(max(1, t.Page), t.Last)
 	start := (t.Page - 1) * tokensPerPage

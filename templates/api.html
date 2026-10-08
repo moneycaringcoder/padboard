@@ -1,5 +1,5 @@
 {{template "head" .}}
-<main class="api">
+<main id="main" class="api">
 <header class="page">
   <h1>API</h1>
   {{template "status" .}}
@@ -7,27 +7,27 @@
 <p class="lede">Everything on this site is served from one snapshot of Ethereum mainnet, refreshed every 5 minutes. The same numbers are available as JSON, CORS open. Responses carry <code>ETag</code> / <code>Last-Modified</code> and change only when a sync runs.</p>
 
 <div class="card doc">
-  <h3>GET <code>/api/v1/summary</code></h3>
+  <h3><span class="st">GET</span><code>/api/v1/summary</code></h3>
   <p>Every platform: today, 24h / 7d / 30d / all-time windows (volume, fees, protocol revenue, creator fees, trades, launches, graduations), indexing progress (<code>syncedToBlock</code>, <code>indexedPct</code>) and, where one exists, the platform token (price, 24h change, supply, burned, FDV, market cap).</p>
   <pre>curl -s https://{{.Host}}/api/v1/summary | jq '.platforms[] | {name, volume7d: .ranges["7d"].volumeUsd, fdv: .platformToken.fdvUsd}'</pre>
 </div>
 
 <div class="card doc">
-  <h3>GET <code>/api/v1/daily</code> <small>?interval=day|hour</small></h3>
+  <h3><span class="st">GET</span><code>/api/v1/daily</code> <small>?interval=day|hour</small></h3>
   <p>Time series. One row per UTC day (or hour) with a bucket per platform: <code>volUsd</code>, <code>volEth</code>, <code>swaps</code>, <code>launches</code>, <code>graduations</code>, <code>creatorUsd</code>, <code>holderUsd</code>, <code>partnerUsd</code> (partners, modules, interfaces), <code>platformUsd</code>, <code>launchFeeUsd</code>, <code>creatorPaid</code>, <code>tokenPrice</code> (platform token, last swap in the bucket), plus pricing-coverage counters <code>unpriced</code> and <code>spotPriced</code>.</p>
   <pre>curl -s "https://{{.Host}}/api/v1/daily?interval=day" | jq '.[-1]'</pre>
 </div>
 
 <div class="card doc">
-  <h3>GET <code>/api/v1/tokens</code> <small>?pad=stockereum|sender|stroid|clanker &amp;sort=volume|fdv|price|trades|new &amp;q=text &amp;page=N</small></h3>
+  <h3><span class="st">GET</span><code>/api/v1/tokens</code> <small>?pad=stockereum|sender|stroid|clanker &amp;sort=volume|fdv|price|trades|new &amp;q=text &amp;page=N</small></h3>
   <p>Every launched token, 100 per page, same filters as the Tokens tab. Fields: address, platform, symbol, name, image, quote, quoteSymbol, poolId, creator, created, graduated, swaps, volumeQuote, volumeUsd, priceUsd, supply, fdvUsd.</p>
   <pre>curl -s "https://{{.Host}}/api/v1/tokens?pad=sender&sort=new&page=1" | jq '.tokens[:3]'</pre>
-  <h3>GET <code>/api/v1/tokens/{address}</code></h3>
+  <h3><span class="st">GET</span><code>/api/v1/tokens/{address}</code></h3>
   <pre>curl -s https://{{.Host}}/api/v1/tokens/0x75e2fc69ff2ac12af65ba7d321bbf4f878c535d2</pre>
 </div>
 
 <div class="card doc">
-  <h3>GET <code>/api/snapshot.json</code></h3>
+  <h3><span class="st">GET</span><code>/api/snapshot.json</code></h3>
   <p>The raw snapshot the server runs on: every token, pool id → token map, quote assets with prices and logos, hourly ETH/USD series, and the per-platform hourly aggregates keyed <code>"&lt;platform&gt;/&lt;hour unix&gt;"</code>. A few MB; use it if you want to roll your own windows.</p>
   <pre>curl -s https://{{.Host}}/api/snapshot.json | jq '{head, tokens: (.tokens|length), hours: (.hours|length)}'</pre>
 </div>

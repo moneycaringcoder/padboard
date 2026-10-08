@@ -8,7 +8,7 @@
   {{template "status" .}}
 </header>
 {{if .Empty}}
-<p class="muted">First sync is reading mainnet logs — refresh in a minute.</p>
+<p class="empty">First sync is reading mainnet logs — refresh in a minute.</p>
 {{else}}
 
 <!-- Every launchpad at a glance, floating above the leaderboard; follows the range toggle -->
@@ -36,10 +36,10 @@
 <!-- Leaderboard: every launchpad, follows the range toggle; dominance donut on the right -->
 <section class="card board">
   <div class="board-main">
-  <div class="board-head">
+  <header class="ph">
     <h3>Launchpads</h3>
     {{range .Board}}<small class="rl r-{{.Key}}">{{if eq .Key "all"}}All time{{else}}Last {{.Label}}{{end}}, ranked by volume</small>{{end}}
-  </div>
+  </header>
   {{range .Board}}
   <table class="lb r-{{.Key}}">
     <thead><tr>
@@ -82,10 +82,13 @@
 <!-- Every launchpad on one chart: metric and totals/share tabs, window from the
      range toggle. Only the default renders here; other views load as fragments. -->
 <section class="card cmpc" id="cmp">
-  <div class="cmp-tabs">
-    <div class="seg tabs" id="cmp-metric">{{range .Metrics}}<button data-m="{{.Key}}"{{if eq .Key "volume"}} class="on"{{end}}>{{.Label}}</button>{{end}}</div>
-    <div class="seg tabs" id="cmp-mode"><button data-mode="abs" class="on">Totals</button><button data-mode="share">Share</button></div>
-  </div>
+  <header class="ph">
+    <h3>Compare</h3>
+    <div class="ctl">
+      <div class="seg tabs" id="cmp-metric">{{range .Metrics}}<button data-m="{{.Key}}"{{if eq .Key "volume"}} class="on"{{end}}>{{.Label}}</button>{{end}}</div>
+      <div class="seg tabs alt" id="cmp-mode"><button data-mode="abs" class="on">Totals</button><button data-mode="share">Share</button></div>
+    </div>
+  </header>
   {{template "cmpfrag" .Chart}}
 </section>
 
@@ -139,7 +142,7 @@
       <p class="cap">Fees paid out so far</p>
       {{template "segbar" .PaidSplit}}
       <div class="mscroll">
-      <table class="months">
+      <table class="months compact">
         <thead><tr><th>Month</th><th class="r">Fees</th><th class="r">Creators</th>{{if .HasHolders}}<th class="r">Holders</th>{{end}}{{if .HasPartners}}<th class="r">Partners</th>{{end}}<th class="r">Protocol</th>{{if .HasLaunchFee}}<th class="r">Launch fees</th>{{end}}</tr></thead>
         <tbody>
         {{range .Months}}<tr><td>{{.Label}}</td><td class="r">{{usd .Fees}}</td><td class="r">{{usd .Creators}}</td>{{if $c.HasHolders}}<td class="r">{{usd .Holders}}</td>{{end}}{{if $c.HasPartners}}<td class="r">{{usd .Partners}}</td>{{end}}<td class="r">{{usd .Protocol}}</td>{{if $c.HasLaunchFee}}<td class="r">{{usd .LaunchFees}}</td>{{end}}</tr>{{end}}
