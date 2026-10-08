@@ -23,6 +23,9 @@
   --c4: #f06bd8; /* clanker */
   --font: ui-rounded, "SF Pro Rounded", Nunito, system-ui, -apple-system, sans-serif;
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -16px rgba(0,0,0,.7);
+  --gap: 24px;          /* one vertical rhythm between page sections */
+  --dock-h: 60px;       /* dock height; content fades out underneath it */
+  --dock-off: max(22px, env(safe-area-inset-bottom, 0px));
 }
 /* Each platform's accent: any element scoped with .pN paints with var(--pc). */
 .p1 { --pc: var(--c1); } .p2 { --pc: var(--c2); } .p3 { --pc: var(--c3); } .p4 { --pc: var(--c4); }
@@ -34,9 +37,16 @@ h1, h2, h3 { margin: 0; font-weight: 800; letter-spacing: -0.02em; }
 small { display: block; color: var(--muted); font-size: 12.5px; font-weight: 600; }
 .muted { color: var(--muted); }
 .up { color: var(--up); } .down { color: var(--down); }
+/* Deltas under a number: muted text, only the arrow carries the direction. */
+small .up, small .down { color: var(--muted); }
+small .up::before, small .down::before { content: "▲"; font-size: .75em; margin-right: 3px; vertical-align: 1px; }
+small .up::before { color: var(--up); } small .down::before { content: "▼"; color: var(--down); }
 
 /* floating bottom dock */
-.dock { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 20; display: flex; gap: 12px; align-items: stretch; }
+.dock { position: fixed; left: 50%; bottom: var(--dock-off); transform: translateX(-50%); z-index: 20; display: flex; gap: 12px; align-items: stretch; }
+/* Content dissolves under the dock instead of being sliced by it. */
+body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: calc(var(--dock-h) + var(--dock-off) + 28px); pointer-events: none; z-index: 19;
+  background: linear-gradient(to top, var(--bg) 35%, transparent); }
 /* Shadow per button, not filter: drop-shadow on .dock: a filter on the parent
    turns off the children's backdrop blur, letting page text show through. */
 .dock a, .dock .group { display: flex; align-items: center; gap: 10px; border-radius: 16px; background: rgba(21,23,28,.92); backdrop-filter: blur(14px); border: 1px solid var(--line); color: var(--muted); font-weight: 700; font-size: 15px; box-shadow: 0 12px 30px rgba(0,0,0,.55); }
@@ -57,7 +67,7 @@ small { display: block; color: var(--muted); font-size: 12.5px; font-weight: 600
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 0 18px rgba(255, 255, 255, .06), 0 12px 30px rgba(0, 0, 0, .55); }
 .ethpill img { width: 18px; height: 18px; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .35); }
 
-main { margin: 0 auto; padding: 26px 32px 120px; max-width: 1500px; }
+main { margin: 0 auto; padding: 26px 32px calc(var(--dock-h) + var(--dock-off) + 48px); max-width: 1500px; }
 .page { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
 .page h1 { font-size: 36px; }
 
@@ -68,7 +78,7 @@ main { margin: 0 auto; padding: 26px 32px 120px; max-width: 1500px; }
 .seg button:hover:not(.on) { color: var(--fg); }
 
 /* every launchpad at a glance: 2×2, no card chrome, floating above the leaderboard */
-.quad { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 48px; margin: 4px 0 30px; }
+.quad { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap) 48px; margin: 4px 0 var(--gap); }
 .padk { padding: 0 4px; scroll-margin-top: 130px; }
 .padk .big { margin-top: 12px; }
 .pad-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px; }
@@ -162,14 +172,14 @@ tr:last-child td { border-bottom: 0; }
 .updated a { text-decoration: underline; }
 
 @media (max-width: 640px) {
-  main { padding: 16px 16px 110px; }
+  :root { --gap: 16px; --dock-h: 46px; --dock-off: max(12px, env(safe-area-inset-bottom, 0px)); }
+  main { padding: 16px 16px calc(var(--dock-h) + var(--dock-off) + 40px); }
   .dock a { padding: 12px 14px; font-size: 13px; }
-  .ticker { grid-template-columns: 1fr 1fr; }
-  .tk-label { grid-column: 1 / -1; padding: 6px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .tk { padding: 8px 14px; gap: 10px; }
-  .tk + .tk { border-left: 0; }
-  .tk:nth-of-type(even) { border-left: 1px solid var(--line); }
-  .tk:nth-of-type(n+3) { border-top: 1px solid var(--line); }
+  /* one scrolling row: label pinned, one fixed-width cell per pad */
+  .ticker { display: flex; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; height: 36px; }
+  .ticker::-webkit-scrollbar { display: none; }
+  .tk-label { position: sticky; left: 0; z-index: 1; background: var(--card); padding: 6px 12px 6px 16px; flex: none; }
+  .tk { flex: none; width: 320px; padding: 8px 14px; gap: 10px; }
   .big { grid-template-columns: 1fr 1fr; gap: 10px; }
   .big > div, .big > div:first-child { border-left: 0; padding: 0; }
 }
@@ -280,7 +290,7 @@ th a.on::after { content: " ↓"; color: var(--up); }
 @media (max-width: 640px) {
   .page h1 { font-size: 28px; }
   .page .hint { display: none; }
-  .dock { bottom: 12px; gap: 8px; width: calc(100% - 24px); justify-content: center; }
+  .dock { gap: 8px; width: calc(100% - 24px); justify-content: center; }
   .dock a { padding: 11px 12px; font-size: 0; gap: 0; }
   .dock a svg { width: 20px; height: 20px; }
   .dock a.on { font-size: 13px; gap: 8px; }
@@ -310,7 +320,7 @@ table.coins tbody tr:hover td:last-child { border-radius: 0 14px 14px 0; }
 table.coins tbody tr:has(+ tr:hover) td { border-color: transparent; }
 
 /* footer: small, inline; avatar links to X */
-.foot { margin-top: 40px; }
+.foot { margin-top: var(--gap); }
 .foot .updated { margin: 0; }
 .xpf { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; color: var(--fg); text-decoration: underline; }
 .xpf img { width: 22px; height: 22px; border-radius: 50%; background: var(--card-2); }
@@ -337,7 +347,7 @@ main { animation: enter .28s ease both; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }
-@media (max-width: 640px) { .page { margin: -16px -16px 16px; padding: 12px 16px 10px; } .ticker { position: relative; height: auto; } body:has(.ticker) .page { top: 0; } }
+@media (max-width: 640px) { .page { margin: -16px -16px 16px; padding: 12px 16px 10px; } .page .status { display: none; } .ticker { position: relative; } body:has(.ticker) .page { top: 0; } }
 
 /* compact top-coins table inside half-width columns */
 .coins.compact { table-layout: auto; }
@@ -355,7 +365,7 @@ body[data-range="24h"] #range [data-r="24h"], body[data-range="7d"] #range [data
 body[data-range="30d"] #range [data-r="30d"], body[data-range="all"] #range [data-r="all"] { background: var(--fg); color: var(--bg); }
 
 /* leaderboard: every launchpad, one row each */
-.board { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); gap: 0 22px; padding: 16px 18px 10px; margin-bottom: 34px; }
+.board { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); gap: 0 22px; padding: 16px 18px 10px; margin-bottom: var(--gap); }
 .board-main { min-width: 0; overflow-x: auto; scrollbar-width: thin; } /* wide fonts scroll here, never into the donut */
 .board-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 2px 4px; }
 .board-head h3 { margin: 0; font-size: 16px; }
@@ -389,7 +399,7 @@ body[data-range="24h"] .lb.r-24h, body[data-range="7d"] .lb.r-7d, body[data-rang
 .pad-head .pn { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .pad-head .pn a { margin: 2px 0 0; font-size: 12.5px; }
 .pad-head .sync { font-size: 12px; }
-.cmpc { margin-top: 16px; display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: end; }
+.cmpc { margin-top: var(--gap); display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: end; }
 .cmp-frag { display: contents; }
 .cmp-frag > .chart-total { grid-row: 1; grid-column: 1; }
 .cmp-tabs { grid-row: 1; grid-column: 2; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
@@ -406,7 +416,7 @@ body[data-range="24h"] .lb.r-24h, body[data-range="7d"] .lb.r-7d, body[data-rang
 .clegend b { color: var(--fg); }
 
 /* detail cards: each picks its launchpad */
-.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; margin-top: 16px; align-items: stretch; }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); margin-top: var(--gap); align-items: stretch; }
 /* Cards in a row share its height; the shorter one keeps its closing note at
    the bottom. Long month tables scroll inside a capped area. */
 .duo > .card { display: flex; flex-direction: column; min-width: 0; }

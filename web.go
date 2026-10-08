@@ -126,17 +126,17 @@ func fmtAgo(ts int64) string {
 	}
 }
 
-// fmtDelta renders a signed percentage change, uncapped, with thousands
-// separators for big jumps ("+18,300%").
+// fmtDelta renders an unsigned percentage change, uncapped, with thousands
+// separators for big jumps ("18,300%"); the class paints the direction arrow.
 func fmtDelta(p float64) template.HTML {
 	if p == 0 || math.IsInf(p, 0) || math.IsNaN(p) {
 		return ""
 	}
-	cls, sign := "up", "+"
+	cls := "up"
 	if p < 0 {
-		cls, sign = "down", "-"
+		cls = "down"
 	}
-	return template.HTML(fmt.Sprintf(`<span class="%s">%s%s%%</span>`, cls, sign, fmtNum(int(math.Round(math.Abs(p))))))
+	return template.HTML(fmt.Sprintf(`<span class="%s">%s%%</span>`, cls, fmtNum(int(math.Round(math.Abs(p))))))
 }
 
 func pctChange(cur, prev float64) float64 {
