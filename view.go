@@ -384,8 +384,8 @@ func comparison(byPad map[string][]hourAgg, pads []*platform, now time.Time, ran
 	from := floor(nowU) - int64(n-1)*w.step
 	if n == 0 {
 		first := nowU
-		for _, hs := range byPad {
-			if len(hs) > 0 {
+		for _, p := range pads {
+			if hs := byPad[p.Key]; len(hs) > 0 {
 				first = min(first, hs[0].H)
 			}
 		}

@@ -278,6 +278,8 @@ body[data-range="24h"] .dn.r-24h, body[data-range="7d"] .dn.r-7d, body[data-rang
 .pad-head a { color: var(--muted); font-size: var(--cap); font-weight: 600; }
 .pad-head .pn a { margin: 2px 0 0; }
 .pad-head a:hover { color: var(--fg); }
+.pad-head h2 a { font: inherit; color: inherit; } /* the pad name is a link, not a caption */
+.pad-head h2 a:hover { color: var(--pc); }
 .pad-head .more-link { margin-left: auto; }
 .pad-head .sync { font-size: 12px; }
 .big { grid-template-columns: repeat(4, 1fr); gap: 0; padding: 4px 0 6px; margin-top: 12px; }
@@ -339,8 +341,8 @@ body[data-range="24h"] .dn.r-24h, body[data-range="7d"] .dn.r-7d, body[data-rang
 /* legend row ⇄ donut segment: hovering either one dims the others */
 .dn:has(figcaption .p1:hover) .seg:not(.p1), .dn:has(figcaption .p2:hover) .seg:not(.p2),
 .dn:has(figcaption .p3:hover) .seg:not(.p3), .dn:has(figcaption .p4:hover) .seg:not(.p4) { opacity: .25; }
-.dn:has(.seg.p1:hover) figcaption span:not(.p1), .dn:has(.seg.p2:hover) figcaption span:not(.p2),
-.dn:has(.seg.p3:hover) figcaption span:not(.p3), .dn:has(.seg.p4:hover) figcaption span:not(.p4) { opacity: .4; }
+.dn:has(.seg.p1:hover) figcaption > :not(.p1), .dn:has(.seg.p2:hover) figcaption > :not(.p2),
+.dn:has(.seg.p3:hover) figcaption > :not(.p3), .dn:has(.seg.p4:hover) figcaption > :not(.p4) { opacity: .4; }
 @media (max-width: 1100px) {
   .board { grid-template-columns: 1fr; }
   .dom { border-left: 0; border-top: 1px solid var(--line); margin-top: 8px; padding: 14px 4px 6px; }

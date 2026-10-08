@@ -109,12 +109,14 @@
 
   <section class="card ptokc">
     <header class="ph"><h3>Platform tokens</h3></header>
+    <div class="scroll">
     <table class="ptok">
       <thead><tr><th>Token</th><th class="r">Price</th><th class="r">FDV</th><th class="r">Market cap</th><th class="r">Burned</th></tr></thead>
       <tbody>
       {{range .Columns}}{{if .Token.Symbol}}{{template "ptokrow" .}}{{end}}{{end}}
       </tbody>
     </table>
+    </div>
     <p class="note">Burned is the balance at 0x…dEaD read at the last sync; price is the last swap on the token's own pool. No platform token: {{range .Columns}}{{if not .Token.Symbol}}<span class="lst">{{.Name}}</span>{{end}}{{end}}.</p>
   </section>
 </div>

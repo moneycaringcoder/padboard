@@ -22,6 +22,7 @@ func buildPad(s *State, key string) *pageView {
 	byPad := hoursByPad(s)
 	pv := envelope(s, byPad)
 	pv.Title, pv.Page = p.Name, "pad"
+	pv.Col = column{platform: p} // the header needs the pad even before the first sync
 	if pv.Empty {
 		return &pv
 	}

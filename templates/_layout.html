@@ -83,7 +83,7 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
   {{if .ETHUSD}}<span class="ethpill" id="ethpill" data-tip="ETH/USD, refreshed every sync"><img src="/static/eth.svg" alt=""><b>{{ethprice .ETHUSD}}</b></span>{{end}}
 </nav>
 <form class="search" id="search" action="/tokens" method="get" hidden role="search">
-  <input type="search" name="q" id="sq" placeholder="Search symbol, name, address or launchpad" autocomplete="off" aria-label="Search" aria-controls="sres">
+  <input type="search" name="q" id="sq" placeholder="Search symbol, name, address or launchpad" autocomplete="off" aria-label="Search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sres">
   <ul class="sres" id="sres" role="listbox"></ul>
   <p class="shint">Enter searches all tokens · Esc closes</p>
 </form>
@@ -94,30 +94,45 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
 (() => {
   const box = document.getElementById('search'), q = document.getElementById('sq'), res = document.getElementById('sres'), btn = document.getElementById('sbtn');
   let seq = 0, sel = -1, timer;
-  const open = () => { box.hidden = false; btn.setAttribute('aria-expanded', 'true'); q.focus(); q.select(); };
-  const close = () => { box.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
-  const esc = s => s.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
-  const render = hits => {
-    sel = -1;
-    res.innerHTML = hits.map(h => `<li role="option"><a class="p${h.padIdx}" href="${esc(h.href)}">${h.image ? `<img src="${esc(h.image)}" alt="" class="${h.kind === 'pad' ? 'plogo' : 'ico'}">` : `<i class="ico fb">${esc(h.title.slice(0, 2).toUpperCase())}</i>`}<span><b>${esc(h.title)}</b><small>${esc(h.sub)}</small></span>${h.padName ? `<em>${esc(h.padName)}</em>` : ''}</a></li>`).join('');
+  // Highlight one result (or none) for the mouse-free path; screen readers
+  // follow it through aria-activedescendant.
+  const setSel = i => {
+    sel = i;
+    res.querySelectorAll('li').forEach((li, k) => {
+      li.setAttribute('aria-selected', k === i);
+      li.firstChild.classList.toggle('on', k === i);
+    });
+    if (i >= 0) q.setAttribute('aria-activedescendant', `sr-${i}`); else q.removeAttribute('aria-activedescendant');
   };
+  const show = html => { res.innerHTML = html; sel = -1; q.removeAttribute('aria-activedescendant'); q.setAttribute('aria-expanded', html !== ''); };
+  const open = () => { box.hidden = false; btn.setAttribute('aria-expanded', 'true'); q.focus(); q.select(); };
+  const close = () => {
+    if (box.contains(document.activeElement)) btn.focus();
+    box.hidden = true; btn.setAttribute('aria-expanded', 'false'); setSel(-1);
+  };
+  const esc = s => s.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  // Remote token images fail often: same initials fallback as the server's icon().
+  const icon = h => {
+    const fb = `<i class="ico fb">${esc(h.title.slice(0, 2).toUpperCase())}</i>`;
+    return h.image ? `<img src="${esc(h.image)}" alt="" class="${h.kind === 'pad' ? 'plogo' : 'ico'}" referrerpolicy="no-referrer" onerror="this.outerHTML=this.nextElementSibling.innerHTML"><template>${fb}</template>` : fb;
+  };
+  const render = hits => show(hits.map((h, i) => `<li role="option" id="sr-${i}" aria-selected="false"><a class="p${h.padIdx}" href="${esc(h.href)}">${icon(h)}<span><b>${esc(h.title)}</b><small>${esc(h.sub)}</small></span>${h.padName ? `<em>${esc(h.padName)}</em>` : ''}</a></li>`).join(''));
   const lookup = async () => {
-    const v = q.value.trim();
-    if (!v) { res.innerHTML = ''; return; }
-    const n = ++seq;
+    const v = q.value.trim(), n = ++seq; // bump first: clearing the box outdates any reply in flight
+    if (!v) { show(''); return; }
     try {
       const r = await fetch(`/search?q=${encodeURIComponent(v)}`);
       if (n === seq && r.ok) render(await r.json());
     } catch {}
   };
-  q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(lookup, 120); });
+  // A new query drops the old highlight at once, so Enter never opens a stale pick.
+  q.addEventListener('input', () => { setSel(-1); clearTimeout(timer); timer = setTimeout(lookup, 120); });
   q.addEventListener('keydown', e => {
-    const items = res.querySelectorAll('a');
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    const items = res.querySelectorAll('li');
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && items.length) {
       e.preventDefault();
-      sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-      items.forEach((a, i) => a.classList.toggle('on', i === sel));
-    } else if (e.key === 'Enter' && sel >= 0) { e.preventDefault(); location.href = items[sel].href; }
+      setSel((sel + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length);
+    } else if (e.key === 'Enter' && sel >= 0) { e.preventDefault(); location.href = items[sel].firstChild.href; }
     else if (e.key === 'Escape') close();
   });
   btn.addEventListener('click', () => box.hidden ? open() : close());
@@ -209,6 +224,7 @@ const pad = document.body.dataset.pad || '';
 let cmp = {};
 try { cmp = JSON.parse(localStorage.getItem('cmp') || '{}'); } catch {}
 cmp.metric ||= 'volume'; cmp.mode ||= 'abs';
+const savedMode = cmp.mode; // pad pages chart totals but leave the overview's choice alone
 if (pad) cmp.mode = 'abs';
 const frags = new Map();
 let chartSeq = 0;
@@ -257,7 +273,7 @@ document.addEventListener('click', e => {
   if (c) {
     if (c.dataset.m) cmp.metric = c.dataset.m;
     if (c.dataset.mode) cmp.mode = c.dataset.mode;
-    try { localStorage.setItem('cmp', JSON.stringify(cmp)); } catch {}
+    try { localStorage.setItem('cmp', JSON.stringify(pad ? {...cmp, mode: savedMode} : cmp)); } catch {}
     loadChart();
   }
 });

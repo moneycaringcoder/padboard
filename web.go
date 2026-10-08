@@ -231,7 +231,12 @@ func (c *collector) routes() http.Handler {
 		render(w, r, "pad.html", *pv)
 	})))
 	mux.Handle("/t/{address}", rcTok.wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		pv := buildToken(c.state, r.PathValue("address"))
+		addr := r.PathValue("address")
+		if low := toLower(addr); low != addr { // checksummed links land on the one canonical URL
+			http.Redirect(w, r, "/t/"+low, http.StatusMovedPermanently)
+			return
+		}
+		pv := buildToken(c.state, addr)
 		if pv == nil {
 			http.NotFound(w, r)
 			return
