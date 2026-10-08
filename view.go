@@ -58,6 +58,7 @@ type compareChart struct {
 	Range, RangeLabel string
 	Key, Label        string // metric
 	Share             bool   // 100%-stacked share of each bucket
+	Pad               string // set when the chart is one launchpad alone
 	Total             string
 	Legend            []legendItem
 	SVG               template.HTML
@@ -140,6 +141,9 @@ type pageView struct {
 	Host        string        // api page
 	Origin      string        // scheme://host for canonical/og tags
 	Path        string
+	Col         column       // pad page: the one launchpad
+	Tok         tokenRow     // token page
+	More        []tokenRow   // token page: top coins from the same launchpad
 	Ticker      []tickerItem // today line, every page
 	Version     string       // cache-busting token for static assets
 }
@@ -298,7 +302,7 @@ func buildView(s *State) pageView {
 	for _, p := range platforms {
 		pv.Columns = append(pv.Columns, buildColumn(s, p, byPad[p.Key], now, true))
 	}
-	pv.Chart, pv.Metrics = comparison(byPad, now, "7d", "volume", false), chartMetrics
+	pv.Chart, pv.Metrics = comparison(byPad, platforms, now, "7d", "volume", false), chartMetrics
 	pv.TopAll = topCoins(s, "", 10)
 	return pv
 }
@@ -359,10 +363,10 @@ var chartMetrics = []chartMetric{
 	{"trades", "Trades", func(a *Agg) float64 { return float64(a.Swaps) }, fmtK},
 }
 
-// comparison builds the stacked chart of every platform for one window and
-// metric, as totals or as each bucket's share (100% stacked). Unknown keys
-// fall back to 7d / volume. Caller holds s.mu.
-func comparison(byPad map[string][]hourAgg, now time.Time, rangeKey, metricKey string, share bool) compareChart {
+// comparison builds the stacked chart of pads for one window and metric, as
+// totals or as each bucket's share (100% stacked). Unknown keys fall back to
+// 7d / volume. Caller holds s.mu.
+func comparison(byPad map[string][]hourAgg, pads []*platform, now time.Time, rangeKey, metricKey string, share bool) compareChart {
 	w, mt := chartWindows[1], chartMetrics[0]
 	for _, x := range chartWindows {
 		if x.key == rangeKey {
@@ -392,10 +396,10 @@ func comparison(byPad map[string][]hourAgg, now time.Time, rangeKey, metricKey s
 	for j := range labels {
 		labels[j] = time.Unix(from+int64(j)*w.step, 0).UTC().Format(w.layout)
 	}
-	series := make([][]float64, len(platforms))
-	totals := make([]float64, len(platforms))
+	series := make([][]float64, len(pads))
+	totals := make([]float64, len(pads))
 	sum := 0.0
-	for i, p := range platforms {
+	for i, p := range pads {
 		series[i] = make([]float64, n)
 		for _, x := range byPad[p.Key] {
 			if x.H < from {
@@ -427,27 +431,30 @@ func comparison(byPad map[string][]hourAgg, now time.Time, rangeKey, metricKey s
 		fy = fmtPct
 	}
 	// Stack and list platforms largest first over the window.
-	order := make([]int, len(platforms))
+	order := make([]int, len(pads))
 	for i := range order {
 		order[i] = i
 	}
 	sort.SliceStable(order, func(a, b int) bool { return totals[order[a]] > totals[order[b]] })
 	cc := compareChart{Range: w.key, RangeLabel: w.label, Key: mt.Key, Label: mt.Label, Share: share, Total: mt.fy(sum)}
-	pads := make([]*platform, len(order))
+	if len(pads) == 1 {
+		cc.Pad = pads[0].Key
+	}
+	stack := make([]*platform, len(order))
 	vals := make([][]float64, len(order))
 	for k, i := range order {
-		pads[k], vals[k] = platforms[i], series[i]
+		stack[k], vals[k] = pads[i], series[i]
 		text := mt.fy(totals[i])
 		if share && sum > 0 {
 			text = fmtPct(totals[i] / sum * 100)
 		}
-		cc.Legend = append(cc.Legend, legendItem{platforms[i], text})
+		cc.Legend = append(cc.Legend, legendItem{pads[i], text})
 	}
 	title := mt.Label + ", " + w.label + ", stacked by launchpad"
 	if share {
 		title = mt.Label + " share, " + w.label + ", by launchpad"
 	}
-	cc.SVG = stacked(vals, pads, labels, fy, share, title)
+	cc.SVG = stacked(vals, stack, labels, fy, share, title)
 	return cc
 }
 
@@ -479,7 +486,7 @@ func board(s *State, byPad map[string][]hourAgg, now time.Time) []boardRange {
 			br.Total.Protocol += r.Protocol
 			br.Total.Trades += r.Trades
 			br.Total.Launches += r.Launches
-			br.Rows = append(br.Rows, boardRow{platform: p, Stats: r, Spark: sparks[i], Progress: progress(s, p), Href: "/tokens?pad=" + p.Key})
+			br.Rows = append(br.Rows, boardRow{platform: p, Stats: r, Spark: sparks[i], Progress: progress(s, p), Href: "/p/" + p.Key})
 		}
 		for i := range br.Rows {
 			if br.Total.Volume > 0 {

@@ -38,7 +38,10 @@ Environment:
 Pages: `/` overview (every launchpad ranked for 24h/7d/30d/all with a dominance
 donut, a card per launchpad, one stacked chart comparing them all, and detail
 cards with a launchpad picker; refreshes itself every minute while visible),
-`/tokens` (every launch, paged by 100), `/api` (docs). JSON: `/api/v1/summary`,
+`/tokens` (every launch, paged by 100), `/p/{launchpad}` (one launchpad: windows,
+activity chart, trading, fees, platform token, top coins), `/t/{address}` (one
+token), `/api` (docs). The dock's search (`/` key) finds tokens and launchpads
+via `/search?q=`. JSON: `/api/v1/summary`,
 `/api/v1/daily?interval=day|hour`, `/api/v1/tokens?pad&sort&q&page`,
 `/api/v1/tokens/{address}`, `/api/snapshot.json`; free, 60 req/min per IP.
 `/healthz` for probes. Pages, JSON and static files are rendered once per sync

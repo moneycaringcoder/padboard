@@ -155,6 +155,9 @@ body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height
 .ph h3 { margin: 0; }
 .ph small { font-size: var(--cap); }
 .ph .ctl { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.ph .more-link, .pad-head .more-link { margin-left: auto; color: var(--muted); font-size: var(--cap); font-weight: 600; white-space: nowrap; }
+.ph .more-link:hover, .pad-head .more-link:hover { color: var(--fg); }
+.ph h3 .st { margin-left: 6px; vertical-align: 2px; }
 
 /* segmented control; .alt is the quieter secondary variant */
 .seg { display: inline-flex; background: var(--card-2); border-radius: 999px; padding: 3px; gap: 2px; }
@@ -329,7 +332,8 @@ body[data-range="24h"] .dn.r-24h, body[data-range="7d"] .dn.r-7d, body[data-rang
 .donut .dv { fill: var(--fg); font: 800 var(--n2) var(--font); text-anchor: middle; letter-spacing: -.02em; }
 .donut .dl { fill: var(--muted); font: 700 10.5px var(--font); text-anchor: middle; text-transform: uppercase; letter-spacing: .1em; }
 .dn figcaption { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; width: 100%; font-size: var(--cap); color: var(--muted); font-weight: 600; }
-.dn figcaption span { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; transition: opacity .15s; cursor: default; }
+.dn figcaption > * { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; transition: opacity .15s; }
+.dn figcaption a:hover { color: var(--fg); }
 .dn figcaption img { width: 16px; height: 16px; }
 .dn figcaption b { margin-left: auto; color: var(--fg); }
 /* legend row ⇄ donut segment: hovering either one dims the others */
@@ -349,7 +353,8 @@ body[data-range="24h"] .dn.r-24h, body[data-range="7d"] .dn.r-7d, body[data-rang
 .cmpc { margin-top: var(--gap); }
 .chart-total b { font-size: var(--n2); letter-spacing: -0.02em; }
 .clegend { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 12px 0 10px; font-size: var(--cap); color: var(--muted); font-weight: 600; }
-.clegend span { display: inline-flex; align-items: center; gap: 7px; }
+.clegend > * { display: inline-flex; align-items: center; gap: 7px; }
+.clegend a:hover { color: var(--fg); }
 .clegend img { width: 16px; height: 16px; }
 .clegend b { color: var(--fg); }
 .bars { width: 100%; height: auto; display: block; cursor: crosshair; }
@@ -400,8 +405,6 @@ body[data-range="24h"] .dn.r-24h, body[data-range="7d"] .dn.r-7d, body[data-rang
 
 /* ---------- tokens page ---------- */
 .filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.filters input[type=search] { background: var(--card-2); border: 1px solid var(--line); color: var(--fg); font: 600 13px var(--font); padding: 8px 14px; border-radius: 999px; width: 260px; outline: none; }
-.filters input[type=search]:focus { border-color: var(--muted); }
 .card.table { padding: 8px 10px 10px; }
 .card.table .sum { padding: 8px 10px 2px; margin-bottom: 4px; }
 .card.table .sum small { font-weight: 600; }
@@ -412,7 +415,7 @@ body[data-range="24h"] .dn.r-24h, body[data-range="7d"] .dn.r-7d, body[data-rang
 .pager .pages a { min-width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; background: var(--card-2); color: var(--muted); font-weight: 700; padding: 0 8px; text-decoration: none; }
 .pager .pages a:hover { color: var(--fg); }
 .pager .pages a.on { background: var(--fg); color: var(--bg); }
-@media (max-width: 900px) { .filters, .filters input[type=search] { width: 100%; } }
+@media (max-width: 900px) { .filters { width: 100%; } }
 @media (max-width: 640px) {
   /* one-line scrolling pad filter; coin, volume and age only */
   .filters .pick { overflow-x: auto; max-width: 100%; scrollbar-width: none; }
@@ -420,6 +423,64 @@ body[data-range="24h"] .dn.r-24h, body[data-range="7d"] .dn.r-7d, body[data-rang
   .coins.all :is(th, td):is(:nth-child(3), :nth-child(4), :nth-child(5), :nth-child(6), :nth-child(8), :nth-child(10)) { display: none; }
   .coins.all :is(th, td).r { white-space: nowrap; padding-left: 10px; }
   .coins.all td a.coin :is(b, small) { max-width: 80px; }
+}
+
+/* ---------- launchpad and token pages ---------- */
+.page h1.with-logo { display: flex; align-items: center; gap: 12px; }
+.page h1.with-logo:has(+ .pad-tag) { margin-right: 0; }
+.page h1.with-logo + .pad-tag { margin-right: auto; }
+.page h1.with-logo .plogo, .page h1.with-logo .ico { width: 36px; height: 36px; font-size: 12px; }
+.page h1.with-logo small { font-size: var(--prose); letter-spacing: 0; margin-top: 2px; }
+.page .pad-tag { font-size: 13px; padding: 5px 12px 5px 7px; }
+.page .pad-tag img { width: 18px; height: 18px; }
+.hero { margin: 0 0 var(--gap); }
+.hero .pad-head { padding-top: 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 16px 0 0; font-size: var(--cap); align-items: center; }
+.kv dt { color: var(--muted); font-weight: 600; }
+.kv dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv a:hover { color: var(--fg); }
+.kv code { font-size: 12px; }
+.kv.cols { grid-template-columns: auto 1fr auto 1fr; column-gap: 20px; }
+@media (max-width: 900px) { .kv.cols { grid-template-columns: auto 1fr; } }
+.facts .pair .ico { width: 18px; height: 18px; }
+/* launchpad page: platform token as one slim strip, tinted in the pad colour */
+.tokstrip { display: flex; align-items: center; gap: 28px; padding: 14px 20px; margin-bottom: var(--gap); border: 1px solid color-mix(in srgb, var(--pc) 25%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--pc) 9%, var(--card)), var(--card) 60%); transition: border-color .15s; }
+.tokstrip:hover { border-color: color-mix(in srgb, var(--pc) 60%, transparent); }
+.tokstrip .coin { min-width: 160px; }
+.tokstrip .coin b { font-size: var(--n4); }
+.tokstrip .coin small { color: var(--pc); }
+.tokstrip .ts { padding-left: 24px; border-left: 1px solid var(--line); }
+.tokstrip .ts b { display: block; font-size: var(--n3); letter-spacing: -.01em; }
+.card.wide { margin-top: var(--gap); }
+@media (max-width: 760px) {
+  .tokstrip { flex-wrap: wrap; gap: 14px 0; padding: 14px 16px; }
+  .tokstrip .coin { width: 100%; min-width: 0; }
+  .tokstrip .ts { flex: 1 0 45%; padding-left: 0; border-left: 0; }
+}
+
+/* ---------- dock search ---------- */
+.sbtn { display: flex; align-items: center; justify-content: center; padding: 14px 16px; border-radius: 16px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--line); color: var(--muted); cursor: pointer; box-shadow: 0 12px 30px rgba(0,0,0,.55); }
+.sbtn:hover, .sbtn[aria-expanded="true"] { color: var(--fg); }
+.sbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.search { position: fixed; left: 50%; bottom: calc(var(--dock-off) + var(--dock-h) + 12px); transform: translateX(-50%); z-index: 21; width: min(640px, 100% - 24px); margin: 0; padding: 10px; border-radius: 20px; background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line); box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+.search input { width: 100%; background: var(--card-2); border: 1px solid var(--line); color: var(--fg); font: 600 15px var(--font); padding: 12px 16px; border-radius: 14px; outline: none; }
+.search input:focus { border-color: var(--muted); }
+.search input::-webkit-search-cancel-button { display: none; }
+.sres { list-style: none; margin: 0; padding: 0; max-height: min(50vh, 420px); overflow-y: auto; }
+.sres:not(:empty) { margin-top: 8px; }
+.sres a { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 12px; color: var(--muted); }
+.sres a:hover, .sres a.on { background: var(--card-2); color: var(--fg); }
+.sres a .ico, .sres a .plogo { width: 28px; height: 28px; }
+.sres a span { min-width: 0; }
+.sres a b { display: block; color: var(--fg); font-size: 14px; }
+.sres a small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sres a em { margin-left: auto; font-style: normal; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--pc); white-space: nowrap; }
+.shint { margin: 8px 4px 2px; font-size: 11.5px; color: var(--dim); font-weight: 600; }
+@media (max-width: 640px) {
+  .sbtn { padding: 11px 12px; }
+  .search { padding: 8px; border-radius: 16px; }
+  .search input { font-size: 16px; padding: 11px 14px; } /* 16px: no iOS zoom */
+  .shint { display: none; }
 }
 
 /* ---------- API page ---------- */

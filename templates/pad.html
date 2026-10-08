@@ -1,0 +1,68 @@
+{{template "head" .}}
+<main id="main">
+{{$c := .Col}}
+<header class="page">
+  <h1 class="with-logo"><img class="plogo" src="{{$c.Logo}}" alt="">{{$c.Name}}</h1>
+  {{if not .Empty}}{{template "rangeseg"}}{{end}}
+  {{template "status" .}}
+</header>
+{{if .Empty}}
+<p class="empty">First sync is reading mainnet logs — refresh in a minute.</p>
+{{else}}
+
+<section class="padk hero p{{$c.Idx}}">
+  <header class="pad-head">
+    <div class="pn">
+      <a href="{{$c.Site}}" target="_blank" rel="noopener">{{host $c.Site}} ↗</a>
+    </div>
+    {{if lt $c.Progress 100.0}}<span class="sync">indexing {{pct $c.Progress}}</span>{{end}}
+    <a class="more-link" href="/tokens?pad={{$c.Key}}">{{k $c.Tokens}} tokens →</a>
+  </header>
+  {{template "bigstats" $c.Ranges}}
+</section>
+
+{{if $c.Token.Symbol}}
+<a class="card tokstrip p{{$c.Idx}}" href="/t/{{$c.Token.Address}}">
+  <span class="coin">{{icon $c.Token.Image $c.Token.Symbol}}<span><b>${{$c.Token.Symbol}}</b><small>platform token →</small></span></span>
+  {{if $c.Token.HasPrice}}
+  <span class="ts"><b>{{price $c.Token.Price}}</b><small>Price {{delta $c.Token.Change24}}</small></span>
+  <span class="ts"><b>{{usd $c.Token.FDV}}</b><small>FDV</small></span>
+  <span class="ts"><b>{{usd $c.Token.Mcap}}</b><small>Market cap, ex-burned</small></span>
+  <span class="ts"><b>{{pct2 $c.Token.BurnedPct}}</b><small>Burned · {{usd $c.Token.BurnedValue}}</small></span>
+  {{else}}<span class="ts muted">no swaps yet</span>{{end}}
+</a>
+{{end}}
+
+<section class="card cmpc p{{$c.Idx}}" id="cmp">
+  <header class="ph">
+    <h3>Activity</h3>
+    <div class="ctl">
+      <div class="seg tabs" id="cmp-metric">{{range .Metrics}}<button data-m="{{.Key}}"{{if eq .Key "volume"}} class="on"{{end}}>{{.Label}}</button>{{end}}</div>
+    </div>
+  </header>
+  {{template "cmpfrag" .Chart}}
+</section>
+
+<div class="duo">
+  <section class="card">
+    <header class="ph"><h3>Trading</h3></header>
+    <div class="pv p{{$c.Idx}}">{{template "trading" $c}}</div>
+  </section>
+  <section class="card">
+    <header class="ph"><h3>Fees and revenue</h3></header>
+    <div class="pv p{{$c.Idx}}">{{template "fees" $c}}</div>
+  </section>
+</div>
+
+<section class="card wide">
+  <header class="ph"><h3>Top coins, all time</h3><a class="more-link" href="/tokens?pad={{$c.Key}}">all {{k $c.Tokens}} tokens →</a></header>
+  {{template "coins" $c.TopCoins}}
+</section>
+
+{{template "foot" .}}
+{{end}}
+</main>
+{{template "dock" .}}
+{{template "livejs"}}
+</body>
+</html>

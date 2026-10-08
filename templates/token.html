@@ -1,0 +1,47 @@
+{{template "head" .}}
+<main id="main">
+{{$t := .Tok}}
+<header class="page">
+  <h1 class="with-logo">{{icon $t.Image $t.Symbol}}{{$t.Symbol}}<small>{{$t.Name}}</small></h1>
+  <a class="pad-tag p{{$t.Pad.Idx}}" href="/p/{{$t.Pad.Key}}"><img src="{{$t.Pad.Logo}}" alt="">{{$t.Pad.Name}}</a>
+  {{template "status" .}}
+</header>
+
+<section class="padk hero p{{$t.Pad.Idx}}">
+  <div class="big r-24h r-7d r-30d r-all">
+    <div><b>{{usd $t.VolUSD}}</b><small>Volume, all time</small></div>
+    <div><b>{{k $t.Swaps}}</b><small>Trades</small></div>
+    <div><b>{{price $t.PriceUSD}}</b><small>Price{{if $t.PriceAt}}, {{ago $t.PriceAt}}{{end}}</small></div>
+    <div><b>{{usd $t.FDV}}</b><small>FDV</small></div>
+  </div>
+</section>
+
+<section class="card about">
+  <header class="ph"><h3>About</h3>
+    {{if $t.Graduated}}<span class="st grad">graduated</span>{{else if $t.Pad.HasGraduation}}<span class="st bond">bonding</span>{{else}}<span class="st">open pool</span>{{end}}
+  </header>
+  <div class="facts">
+    <div><b>{{ago $t.Created}}</b><small>launched {{date $t.Created}}</small></div>
+    {{if $t.Graduated}}<div><b>{{ago $t.Graduated}}</b><small>graduated {{date $t.Graduated}}</small></div>{{end}}
+    <div><b><span class="pair">{{icon $t.QuoteLogo $t.QuoteSymbol}}{{$t.QuoteSymbol}}</span></b><small>paired with</small></div>
+    <div><b>{{k $t.Supply}}</b><small>total supply</small></div>
+    <div><b>{{k $t.VolQuote}} {{$t.QuoteSymbol}}</b><small>volume in quote</small></div>
+    <div><b><a href="/p/{{$t.Pad.Key}}">{{$t.Pad.Name}}</a></b><small><a href="{{$t.Pad.Site}}" target="_blank" rel="noopener">{{host $t.Pad.Site}} ↗</a></small></div>
+  </div>
+  <dl class="kv cols">
+    <dt>Token</dt><dd><a href="https://etherscan.io/token/{{$t.Address}}" target="_blank" rel="noopener"><code>{{$t.Address}}</code> ↗</a></dd>
+    <dt>Creator</dt><dd><a href="https://etherscan.io/address/{{$t.Creator}}" target="_blank" rel="noopener"><code>{{$t.Creator}}</code> ↗</a></dd>
+    <dt>Pool</dt><dd><code>{{$t.PoolID}}</code></dd>
+  </dl>
+  <p class="note">Volume is the quote-side delta of every swap on this pool; price is the pool's mark after the last swap and FDV = price × total supply. Thin pools print thin marks. Indexed from mainnet logs, 12 confirmations behind the tip.</p>
+</section>
+
+<section class="card wide">
+  <header class="ph"><h3>More from {{$t.Pad.Name}}</h3><a class="more-link" href="/tokens?pad={{$t.Pad.Key}}">all tokens →</a></header>
+  {{template "coins" .More}}
+</section>
+{{template "foot" .}}
+</main>
+{{template "dock" .}}
+</body>
+</html>

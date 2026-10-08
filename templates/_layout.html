@@ -24,7 +24,7 @@
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"padboard","url":"{{.Origin}}/","description":"Ethereum launchpad analytics from mainnet logs: Stockereum, Sender, Stroid, Clanker.","author":{"@type":"Person","name":"0xmcc","url":"https://x.com/0xmcc"}}</script>
 <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
 </head>
-<body data-range="7d" data-page="{{.Page}}">
+<body data-range="7d" data-page="{{.Page}}"{{if eq .Page "pad"}} data-pad="{{.Col.Key}}"{{end}}>
 <script>try { const r = localStorage.getItem('range'); if (r) document.body.dataset.range = r; } catch {}</script>
 {{template "ticker" .}}
 {{end}}
@@ -33,7 +33,7 @@
 <div class="ticker" id="ticker" style="--n:{{len .Ticker}}">
   <div class="tk-label">24h</div>
   {{range .Ticker}}
-  <a class="tk p{{.Idx}}" href="/#pad-{{.Key}}" title="{{.Name}}, last 24 hours: {{usd .Day.Volume}} volume · {{k .Day.Trades}} trades · {{k .Day.Launches}} launches · {{usd .Day.Fees}} fees">
+  <a class="tk p{{.Idx}}" href="/p/{{.Key}}" title="{{.Name}}, last 24 hours: {{usd .Day.Volume}} volume · {{k .Day.Trades}} trades · {{k .Day.Launches}} launches · {{usd .Day.Fees}} fees">
     <span class="tn"><img src="{{.Logo}}" alt=""><b class="nm">{{.Name}}</b></span>
     <span><em class="{{trend .Day.DVolume}}">{{usd .Day.Volume}}</em> vol</span>
     <span class="tl"><em class="{{trend .Day.DLaunches}}">{{k .Day.Launches}}</em> launches</span>
@@ -51,7 +51,9 @@ Every platform launches tokens into Uniswap v4 pools. Volume is the quote-side d
 
 ## Pages
 - {{.Origin}}/ : Overview — leaderboard and volume dominance for 24h/7d/30d/all, a card per launchpad, one stacked chart comparing every launchpad (volume, launches, fees, revenue, trades), then top coins, fee routing, trading and platform tokens with a launchpad picker
-- {{.Origin}}/tokens : every launched token, sortable, 100 per page
+- {{.Origin}}/tokens : every launched token, sortable, 100 per page (?pad=, ?q=, ?sort=)
+- {{.Origin}}/p/{stockereum|sender|stroid|clanker} : one launchpad — windows, activity chart, trading, fees, platform token, top coins
+- {{.Origin}}/t/{address} : one launched token — volume, trades, price, FDV, launch and pool details
 - {{.Origin}}/api : API documentation
 
 ## JSON API (no auth, CORS open, 60 requests/min per IP)
@@ -76,9 +78,55 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
     <a href="/api" {{if eq .Page "api"}}class="on"{{end}}>
       <svg viewBox="0 0 24 24"><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/><path d="m14 4-4 16"/></svg>API</a>
   </span>
+  <button class="sbtn" id="sbtn" type="button" aria-label="Search" aria-expanded="false" data-tip="Search tokens and launchpads (/)">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
   {{if .ETHUSD}}<span class="ethpill" id="ethpill" data-tip="ETH/USD, refreshed every sync"><img src="/static/eth.svg" alt=""><b>{{ethprice .ETHUSD}}</b></span>{{end}}
 </nav>
+<form class="search" id="search" action="/tokens" method="get" hidden role="search">
+  <input type="search" name="q" id="sq" placeholder="Search symbol, name, address or launchpad" autocomplete="off" aria-label="Search" aria-controls="sres">
+  <ul class="sres" id="sres" role="listbox"></ul>
+  <p class="shint">Enter searches all tokens · Esc closes</p>
+</form>
 <div class="tip" id="tip" hidden></div>
+<script>
+// Dock search: "/" or the button opens it; keystrokes hit /search for the top
+// hits (launchpads, then tokens); Enter without a pick lists every match.
+(() => {
+  const box = document.getElementById('search'), q = document.getElementById('sq'), res = document.getElementById('sres'), btn = document.getElementById('sbtn');
+  let seq = 0, sel = -1, timer;
+  const open = () => { box.hidden = false; btn.setAttribute('aria-expanded', 'true'); q.focus(); q.select(); };
+  const close = () => { box.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  const esc = s => s.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const render = hits => {
+    sel = -1;
+    res.innerHTML = hits.map(h => `<li role="option"><a class="p${h.padIdx}" href="${esc(h.href)}">${h.image ? `<img src="${esc(h.image)}" alt="" class="${h.kind === 'pad' ? 'plogo' : 'ico'}">` : `<i class="ico fb">${esc(h.title.slice(0, 2).toUpperCase())}</i>`}<span><b>${esc(h.title)}</b><small>${esc(h.sub)}</small></span>${h.padName ? `<em>${esc(h.padName)}</em>` : ''}</a></li>`).join('');
+  };
+  const lookup = async () => {
+    const v = q.value.trim();
+    if (!v) { res.innerHTML = ''; return; }
+    const n = ++seq;
+    try {
+      const r = await fetch(`/search?q=${encodeURIComponent(v)}`);
+      if (n === seq && r.ok) render(await r.json());
+    } catch {}
+  };
+  q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(lookup, 120); });
+  q.addEventListener('keydown', e => {
+    const items = res.querySelectorAll('a');
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items.forEach((a, i) => a.classList.toggle('on', i === sel));
+    } else if (e.key === 'Enter' && sel >= 0) { e.preventDefault(); location.href = items[sel].href; }
+    else if (e.key === 'Escape') close();
+  });
+  btn.addEventListener('click', () => box.hidden ? open() : close());
+  document.addEventListener('keydown', e => {
+    if (e.key === '/' && !e.target.closest('input, textarea')) { e.preventDefault(); open(); }
+  });
+  document.addEventListener('click', e => { if (!box.hidden && !e.target.closest('#search, #sbtn')) close(); });
+})();
+</script>
 <script>
 (() => {
   const tip = document.getElementById('tip');
@@ -131,4 +179,139 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
   <p class="updated">Last updated at {{.SyncedAt.Format "15:04:05"}} UTC, {{.SyncedAt.Format "Jan 2"}} · block {{num (int .Head)}} · ETH {{usd .ETHUSD}} · <a href="/api/snapshot.json">snapshot.json</a>
     · Follow me on <a class="xpf" href="https://x.com/0xmcc" target="_blank" rel="noopener">X</a></p>
 </footer>
+{{end}}
+
+{{define "livejs"}}
+<script>
+// Shared by the overview and launchpad pages: range toggle, chart tabs,
+// per-card pickers and the one-minute live refresh.
+let picks = {};
+try { picks = JSON.parse(localStorage.getItem('picks') || '{}'); } catch {}
+const pickIn = (card, k) => {
+  if (!card.querySelector(`[data-v="${k}"]`)) return;
+  card.querySelectorAll('[data-v]').forEach(v => v.hidden = v.dataset.v !== k);
+  card.querySelectorAll('.pick [data-k]').forEach(b => {
+    b.classList.toggle('on', b.dataset.k === k);
+    b.setAttribute('aria-pressed', b.dataset.k === k);
+  });
+};
+const syncPressed = () => {
+  document.querySelectorAll('#range button').forEach(b => b.setAttribute('aria-pressed', b.dataset.r === document.body.dataset.range));
+  document.querySelectorAll('#cmp .tabs button').forEach(b => b.setAttribute('aria-pressed', b.classList.contains('on')));
+};
+const applyPicks = root => root.querySelectorAll('.pickable').forEach(c =>
+  pickIn(c, picks[c.dataset.card] || c.querySelector('[data-v]:not([hidden])').dataset.v));
+applyPicks(document);
+// Chart: the page carries one view (7d volume totals); any other
+// range × metric × totals/share loads once as a fragment and is kept until the
+// next live refresh. A launchpad page charts that pad alone (totals only).
+const pad = document.body.dataset.pad || '';
+let cmp = {};
+try { cmp = JSON.parse(localStorage.getItem('cmp') || '{}'); } catch {}
+cmp.metric ||= 'volume'; cmp.mode ||= 'abs';
+if (pad) cmp.mode = 'abs';
+const frags = new Map();
+let chartSeq = 0;
+const chartKey = () => `${document.body.dataset.range}|${cmp.metric}|${cmp.mode}|${pad}`;
+const fetchFrag = async key => {
+  if (frags.has(key)) return frags.get(key);
+  const [r, m, mode, p] = key.split('|');
+  try {
+    const res = await fetch(`/chart?range=${r}&metric=${m}&mode=${mode}&pad=${p}`);
+    if (!res.ok) return null;
+    const html = await res.text();
+    frags.set(key, html);
+    return html;
+  } catch { return null; }
+};
+const loadChart = async () => {
+  const card = document.getElementById('cmp');
+  if (!card) return;
+  card.querySelectorAll('#cmp-metric [data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === cmp.metric));
+  card.querySelectorAll('#cmp-mode [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === cmp.mode));
+  syncPressed();
+  const key = chartKey(), cur = card.querySelector('.cmp-frag');
+  frags.set(cur.dataset.key, cur.outerHTML);
+  if (cur.dataset.key === key) return;
+  const seq = ++chartSeq, html = await fetchFrag(key);
+  if (html && seq === chartSeq) card.querySelector('.cmp-frag').outerHTML = html;
+};
+loadChart();
+document.addEventListener('click', e => {
+  const r = e.target.closest('#range button');
+  if (r) {
+    document.body.dataset.range = r.dataset.r;
+    try { localStorage.setItem('range', r.dataset.r); } catch {}
+    loadChart();
+    return;
+  }
+  const p = e.target.closest('.pickable .pick [data-k]');
+  if (p) {
+    const card = p.closest('.pickable');
+    pickIn(card, p.dataset.k);
+    picks[card.dataset.card] = p.dataset.k;
+    try { localStorage.setItem('picks', JSON.stringify(picks)); } catch {}
+    return;
+  }
+  const c = e.target.closest('#cmp .tabs button');
+  if (c) {
+    if (c.dataset.m) cmp.metric = c.dataset.m;
+    if (c.dataset.mode) cmp.mode = c.dataset.mode;
+    try { localStorage.setItem('cmp', JSON.stringify(cmp)); } catch {}
+    loadChart();
+  }
+});
+// Live: re-fetch every minute while the tab is visible and swap the ticker and
+// <main> in place, keeping chart tabs and picks; unchanged pages (same ETag)
+// are skipped. Hidden tabs catch up as soon as they are shown.
+const NUMS = '.big b, .lb .num > b, .dn figcaption b, .trio b, .ptok .num > b, .tk em, .ethpill b, .facts b';
+const value = s => {
+  const m = s.replace(/[$,+%×]/g, '').match(/-?[\d.]+/);
+  return m ? parseFloat(m[0]) * ({K: 1e3, M: 1e6, B: 1e9}[(s.match(/[KMB]/) || [''])[0]] || 1) : NaN;
+};
+const tint = (from, to) => {
+  const before = [...from.querySelectorAll(NUMS)].map(el => el.textContent.trim());
+  to.querySelectorAll(NUMS).forEach((el, i) => {
+    const a = before[i], b = el.textContent.trim();
+    if (a !== undefined && a !== b) el.classList.add(value(b) < value(a) ? 'moved-down' : 'moved-up');
+  });
+};
+// Swapped-in content shows at once; only user switches fade (see style.css).
+const calm = el => { el.classList.add('calm'); setTimeout(() => el.classList.remove('calm'), 60); };
+syncPressed();
+let etag = '', last = Date.now();
+const refresh = async () => {
+  last = Date.now();
+  try {
+    const res = await fetch(location.href, {cache: 'no-cache'});
+    const tag = res.headers.get('etag');
+    if (!res.ok || (tag && tag === etag)) return;
+    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+    const main = doc.getElementById('main');
+    if (!main) return;
+    applyPicks(main);
+    // Swap in fresh data for the chart view on screen before the page changes.
+    frags.clear();
+    const nf = main.querySelector('.cmp-frag');
+    if (nf && nf.dataset.key !== chartKey()) {
+      const html = await fetchFrag(chartKey());
+      if (html) nf.outerHTML = html;
+    }
+    // Numbers that moved since the last minute get a brief up/down tint.
+    tint(document.getElementById('main'), main);
+    const tk = doc.getElementById('ticker'), old = document.getElementById('ticker');
+    if (tk && old) tint(old, tk);
+    calm(main);
+    main.style.animation = 'none';
+    document.getElementById('main').replaceWith(main);
+    if (tk && old) { calm(tk); old.replaceWith(tk); }
+    const ep = doc.getElementById('ethpill'), oldEp = document.getElementById('ethpill');
+    if (ep && oldEp) { tint(oldEp, ep); oldEp.replaceWith(ep); }
+    loadChart();
+    etag = tag;
+  } catch {}
+};
+setInterval(() => { if (!document.hidden) refresh(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - last >= 60000) refresh(); });
+</script>
 {{end}}

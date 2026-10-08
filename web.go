@@ -38,6 +38,7 @@ var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 	},
 	"int":  func(v uint64) int { return int(v) },
 	"host": func(u string) string { return strings.TrimPrefix(u, "https://") },
+	"date": func(ts int64) string { return time.Unix(ts, 0).UTC().Format("Jan 2, 2006") },
 }).ParseFS(assets, "templates/*.html"))
 
 // ---- formatting ----
@@ -149,6 +150,9 @@ func pctChange(cur, prev float64) float64 {
 func (c *collector) routes() http.Handler {
 	mux := http.NewServeMux()
 	rc := &respCache{state: c.state}
+	// Token pages are an unbounded URL space (one per launched token); a crawler
+	// walking them must not evict the hot pages, so they get their own store.
+	rcTok := &respCache{state: c.state}
 	mux.Handle("/static/", rc.wrap(cacheStatic(http.FileServer(http.FS(assets)))))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		c.state.mu.RLock()
@@ -166,6 +170,9 @@ func (c *collector) routes() http.Handler {
 		fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
 		for _, p := range []string{"/", "/tokens", "/api"} {
 			fmt.Fprintf(w, `<url><loc>%s%s</loc><changefreq>hourly</changefreq></url>`, o, p)
+		}
+		for _, p := range platforms {
+			fmt.Fprintf(w, `<url><loc>%s/p/%s</loc><changefreq>hourly</changefreq></url>`, o, p.Key)
 		}
 		fmt.Fprint(w, `</urlset>`)
 	})
@@ -186,16 +193,16 @@ func (c *collector) routes() http.Handler {
 	// The limiter sits outside the cache so hits still count and its headers stay per-client.
 	mux.Handle("/api/", newRateLimit().wrap(rc.wrap(c.apiHeaders(api))))
 
+	render := func(w http.ResponseWriter, r *http.Request, name string, pv pageView) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		pv.Origin = origin(r)
+		pv.Path = r.URL.Path
+		if err := tmpl.ExecuteTemplate(w, name, pv); err != nil {
+			http.Error(w, err.Error(), 500)
+		}
+	}
 	page := func(name string, build func(*http.Request) pageView) http.Handler {
-		return rc.wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			pv := build(r)
-			pv.Origin = origin(r)
-			pv.Path = r.URL.Path
-			if err := tmpl.ExecuteTemplate(w, name, pv); err != nil {
-				http.Error(w, err.Error(), 500)
-			}
-		}))
+		return rc.wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { render(w, r, name, build(r)) }))
 	}
 	mux.Handle("/{$}", page("overview.html", func(*http.Request) pageView { return buildView(c.state) }))
 	mux.Handle("/charts", http.RedirectHandler("/", http.StatusMovedPermanently))
@@ -203,14 +210,37 @@ func (c *collector) routes() http.Handler {
 	// the overview renders its default inline and fetches the rest on demand.
 	mux.Handle("/chart", rc.wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
+		pads := platforms
+		if p := platformByKey(q.Get("pad")); p != nil {
+			pads = []*platform{p}
+		}
 		c.state.mu.RLock()
-		cc := comparison(hoursByPad(c.state), time.Now().UTC(), q.Get("range"), q.Get("metric"), q.Get("mode") == "share")
+		cc := comparison(hoursByPad(c.state), pads, time.Now().UTC(), q.Get("range"), q.Get("metric"), q.Get("mode") == "share")
 		c.state.mu.RUnlock()
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := tmpl.ExecuteTemplate(w, "cmpfrag", cc); err != nil {
 			http.Error(w, err.Error(), 500)
 		}
 	})))
+	mux.Handle("/p/{pad}", rc.wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pv := buildPad(c.state, r.PathValue("pad"))
+		if pv == nil {
+			http.NotFound(w, r)
+			return
+		}
+		render(w, r, "pad.html", *pv)
+	})))
+	mux.Handle("/t/{address}", rcTok.wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pv := buildToken(c.state, r.PathValue("address"))
+		if pv == nil {
+			http.NotFound(w, r)
+			return
+		}
+		render(w, r, "token.html", *pv)
+	})))
+	// Typeahead for the dock search: cheap scan, not rate limited, not cached
+	// (every keystroke is a new URL; caching would only churn the store).
+	mux.HandleFunc("/search", c.searchHandler)
 	mux.Handle("/tokens", page("tokens.html", func(r *http.Request) pageView { return buildTokens(c.state, r) }))
 	mux.Handle("/api", page("api.html", func(r *http.Request) pageView {
 		c.state.mu.RLock()

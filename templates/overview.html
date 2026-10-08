@@ -2,9 +2,7 @@
 <main id="main">
 <header class="page">
   <h1>Overview</h1>
-  {{if not .Empty}}<div class="seg" id="range">
-    <button data-r="24h">24h</button><button data-r="7d">7d</button><button data-r="30d">30d</button><button data-r="all">All</button>
-  </div>{{end}}
+  {{if not .Empty}}{{template "rangeseg"}}{{end}}
   {{template "status" .}}
 </header>
 {{if .Empty}}
@@ -16,19 +14,12 @@
 {{range .Columns}}
 <section class="padk p{{.Idx}}" id="pad-{{.Key}}">
   <header class="pad-head">
-    <img class="plogo" src="{{.Logo}}" alt="">
-    <div class="pn"><h2>{{.Name}}</h2><a href="{{.Site}}" target="_blank" rel="noopener">{{host .Site}} ↗</a></div>
+    <a href="/p/{{.Key}}"><img class="plogo" src="{{.Logo}}" alt=""></a>
+    <div class="pn"><h2><a href="/p/{{.Key}}">{{.Name}}</a></h2><a href="{{.Site}}" target="_blank" rel="noopener">{{host .Site}} ↗</a></div>
     {{if lt .Progress 100.0}}<span class="sync">indexing {{pct .Progress}}</span>{{end}}
-    <a class="more-link" href="/tokens?pad={{.Key}}">{{k .Tokens}} tokens →</a>
+    <a class="more-link" href="/p/{{.Key}}">{{k .Tokens}} tokens →</a>
   </header>
-  {{range .Ranges}}
-  <div class="big r-{{.Key}}">
-    <div><b>{{usd .Volume}}</b><small>Volume {{if .HasDelta}}{{delta .DVolume}}{{end}}</small></div>
-    <div><b>{{k .Launches}}</b><small>Launches {{if .HasDelta}}{{delta .DLaunches}}{{end}}</small></div>
-    <div><b>{{usd .Fees}}</b><small>Fees {{if .HasDelta}}{{delta .DFees}}{{end}}</small></div>
-    <div><b>{{usd .Protocol}}</b><small>Revenue {{if .HasDelta}}{{delta .DProtocol}}{{end}}</small></div>
-  </div>
-  {{end}}
+  {{template "bigstats" .Ranges}}
 </section>
 {{end}}
 </div>
@@ -73,7 +64,7 @@
     {{range .Board}}
     <figure class="dn r-{{.Key}}">
       {{.Donut}}
-      <figcaption>{{range .Rows}}<span class="p{{.Idx}}"><img src="{{.Logo}}" alt="">{{.Name}}<b>{{pct .Share}}</b></span>{{end}}</figcaption>
+      <figcaption>{{range .Rows}}<a class="p{{.Idx}}" href="/p/{{.Key}}"><img src="{{.Logo}}" alt="">{{.Name}}<b>{{pct .Share}}</b></a>{{end}}</figcaption>
     </figure>
     {{end}}
   </aside>
@@ -105,52 +96,14 @@
   <section class="card pickable" data-card="trading">
     <header class="ph"><h3>Trading</h3><nav class="pick">{{template "pickpads" .Columns}}</nav></header>
     {{range $i, $c := .Columns}}
-    <div data-v="{{.Key}}" class="pv p{{.Idx}}"{{if $i}} hidden{{end}}>
-      {{range .Ranges}}
-      <div class="r-{{.Key}} rblock">
-        <p class="cap first">{{$c.Name}}, {{if eq .Key "all"}}all time{{else}}last {{.Label}}{{end}}</p>
-        <div class="trio">
-          <div><b>{{k .Trades}}</b><small>Trades{{if .HasDelta}} {{delta .DTrades}}{{end}}</small></div>
-          <div><b>{{k .Launches}}</b><small>Launches{{if .HasDelta}} {{delta .DLaunches}}{{end}}</small></div>
-          <div><b>{{usd .AvgTrade}}</b><small>Average trade</small></div>
-        </div>
-      </div>
-      {{end}}
-      <p class="cap">Volume by pair, all time</p>
-      {{template "segbar" .QuoteShares}}
-      <p class="cap">Launches, by what they are paired with</p>
-      {{template "segbar" .LaunchShares}}
-      <p class="cap">Launches per day, last 30 days</p>
-      <div class="strip">{{.LaunchStrip}}</div>
-      <div class="facts">
-        {{range .Milestones}}<div><b>{{.Days}}d</b><small>to {{.Mark}} volume</small></div>{{end}}
-        <div><b>{{k .Tokens}}</b><small>tokens launched</small></div>
-        <div><b>{{k .All.Trades}}</b><small>trades, all time</small></div>
-        {{if .HasGraduation}}<div><b>{{k .All.Graduations}}</b><small>graduated</small></div>{{end}}
-      </div>
-      <p class="note">{{.GraduationNote}} {{pct .UnpricedPct}} of swaps have no USD price for their quote asset; {{pct .SpotPct}} are priced at spot rather than hourly.</p>
-    </div>
+    <div data-v="{{.Key}}" class="pv p{{.Idx}}"{{if $i}} hidden{{end}}>{{template "trading" .}}</div>
     {{end}}
   </section>
 
   <section class="card pickable" data-card="fees">
     <header class="ph"><h3>Fees and revenue</h3><nav class="pick">{{template "pickpads" .Columns}}</nav></header>
     {{range $i, $c := .Columns}}
-    <div data-v="{{.Key}}" class="pv p{{.Idx}}"{{if $i}} hidden{{end}}>
-      <p class="cap first">Where {{.Name}}'s fees went, all time</p>
-      {{template "segbar" .FeeSplit}}
-      <p class="cap">Fees paid out so far</p>
-      {{template "segbar" .PaidSplit}}
-      <div class="mscroll">
-      <table class="months compact">
-        <thead><tr><th>Month</th><th class="r">Fees</th><th class="r">Creators</th>{{if .HasHolders}}<th class="r">Holders</th>{{end}}{{if .HasPartners}}<th class="r">Partners</th>{{end}}<th class="r">Protocol</th>{{if .HasLaunchFee}}<th class="r">Launch fees</th>{{end}}</tr></thead>
-        <tbody>
-        {{range .Months}}<tr><td>{{.Label}}</td><td class="r">{{usd .Fees}}</td><td class="r">{{usd .Creators}}</td>{{if $c.HasHolders}}<td class="r">{{usd .Holders}}</td>{{end}}{{if $c.HasPartners}}<td class="r">{{usd .Partners}}</td>{{end}}<td class="r">{{usd .Protocol}}</td>{{if $c.HasLaunchFee}}<td class="r">{{usd .LaunchFees}}</td>{{end}}</tr>{{end}}
-        </tbody>
-      </table>
-      </div>
-      <p class="note">{{.FeeNote}}</p>
-    </div>
+    <div data-v="{{.Key}}" class="pv p{{.Idx}}"{{if $i}} hidden{{end}}>{{template "fees" .}}</div>
     {{end}}
   </section>
 
@@ -159,17 +112,7 @@
     <table class="ptok">
       <thead><tr><th>Token</th><th class="r">Price</th><th class="r">FDV</th><th class="r">Market cap</th><th class="r">Burned</th></tr></thead>
       <tbody>
-      {{range .Columns}}{{if .Token.Symbol}}
-      <tr class="p{{.Idx}}">
-        <td><span class="coin">{{icon .Token.Image .Token.Symbol}}<span><b>${{.Token.Symbol}}</b><small>{{.Name}}</small></span></span></td>
-        {{if .Token.HasPrice}}
-        <td class="r num"><b>{{price .Token.Price}}</b><small>{{delta .Token.Change24}}</small></td>
-        <td class="r num">{{usd .Token.FDV}}</td>
-        <td class="r num">{{usd .Token.Mcap}}<small>ex-burned</small></td>
-        <td class="r num">{{pct2 .Token.BurnedPct}}<small>{{usd .Token.BurnedValue}}</small></td>
-        {{else}}<td class="r muted" colspan="4">no swaps yet</td>{{end}}
-      </tr>
-      {{end}}{{end}}
+      {{range .Columns}}{{if .Token.Symbol}}{{template "ptokrow" .}}{{end}}{{end}}
       </tbody>
     </table>
     <p class="note">Burned is the balance at 0x…dEaD read at the last sync; price is the last swap on the token's own pool. No platform token: {{range .Columns}}{{if not .Token.Symbol}}<span class="lst">{{.Name}}</span>{{end}}{{end}}.</p>
@@ -180,147 +123,84 @@
 {{end}}
 </main>
 {{template "dock" .}}
-
-<script>
-// Per-card launchpad pickers; choices persist across reloads and live refreshes.
-let picks = {};
-try { picks = JSON.parse(localStorage.getItem('picks') || '{}'); } catch {}
-const pickIn = (card, k) => {
-  if (!card.querySelector(`[data-v="${k}"]`)) return;
-  card.querySelectorAll('[data-v]').forEach(v => v.hidden = v.dataset.v !== k);
-  card.querySelectorAll('.pick [data-k]').forEach(b => {
-    b.classList.toggle('on', b.dataset.k === k);
-    b.setAttribute('aria-pressed', b.dataset.k === k);
-  });
-};
-// Range and chart buttons announce which one is selected.
-const syncPressed = () => {
-  document.querySelectorAll('#range button').forEach(b => b.setAttribute('aria-pressed', b.dataset.r === document.body.dataset.range));
-  document.querySelectorAll('#cmp .tabs button').forEach(b => b.setAttribute('aria-pressed', b.classList.contains('on')));
-};
-const applyPicks = root => root.querySelectorAll('.pickable').forEach(c =>
-  pickIn(c, picks[c.dataset.card] || c.querySelector('[data-v]:not([hidden])').dataset.v));
-applyPicks(document);
-// Comparison chart: the page carries one view (7d volume totals); any other
-// range × metric × totals/share loads once as a fragment and is kept until the
-// next live refresh.
-let cmp = {};
-try { cmp = JSON.parse(localStorage.getItem('cmp') || '{}'); } catch {}
-cmp.metric ||= 'volume'; cmp.mode ||= 'abs';
-const frags = new Map();
-let chartSeq = 0;
-const chartKey = () => `${document.body.dataset.range}|${cmp.metric}|${cmp.mode}`;
-const fetchFrag = async key => {
-  if (frags.has(key)) return frags.get(key);
-  const [r, m, mode] = key.split('|');
-  try {
-    const res = await fetch(`/chart?range=${r}&metric=${m}&mode=${mode}`);
-    if (!res.ok) return null;
-    const html = await res.text();
-    frags.set(key, html);
-    return html;
-  } catch { return null; }
-};
-const loadChart = async () => {
-  const card = document.getElementById('cmp');
-  if (!card) return;
-  card.querySelectorAll('#cmp-metric [data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === cmp.metric));
-  card.querySelectorAll('#cmp-mode [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === cmp.mode));
-  syncPressed();
-  const key = chartKey(), cur = card.querySelector('.cmp-frag');
-  frags.set(cur.dataset.key, cur.outerHTML);
-  if (cur.dataset.key === key) return;
-  const seq = ++chartSeq, html = await fetchFrag(key);
-  if (html && seq === chartSeq) card.querySelector('.cmp-frag').outerHTML = html;
-};
-loadChart();
-document.addEventListener('click', e => {
-  const r = e.target.closest('#range button');
-  if (r) {
-    document.body.dataset.range = r.dataset.r;
-    try { localStorage.setItem('range', r.dataset.r); } catch {}
-    loadChart();
-    return;
-  }
-  const p = e.target.closest('.pickable .pick [data-k]');
-  if (p) {
-    const card = p.closest('.pickable');
-    pickIn(card, p.dataset.k);
-    picks[card.dataset.card] = p.dataset.k;
-    try { localStorage.setItem('picks', JSON.stringify(picks)); } catch {}
-    return;
-  }
-  const c = e.target.closest('#cmp .tabs button');
-  if (c) {
-    if (c.dataset.m) cmp.metric = c.dataset.m;
-    if (c.dataset.mode) cmp.mode = c.dataset.mode;
-    try { localStorage.setItem('cmp', JSON.stringify(cmp)); } catch {}
-    loadChart();
-  }
-});
-// Live: re-fetch every minute while the tab is visible and swap the ticker and
-// <main> in place, keeping chart tabs and picks; unchanged pages (same ETag)
-// are skipped. Hidden tabs catch up as soon as they are shown.
-const NUMS = '.big b, .lb .num > b, .dn figcaption b, .trio b, .ptok .num > b, .tk em, .ethpill b';
-const value = s => {
-  const m = s.replace(/[$,+%×]/g, '').match(/-?[\d.]+/);
-  return m ? parseFloat(m[0]) * ({K: 1e3, M: 1e6, B: 1e9}[(s.match(/[KMB]/) || [''])[0]] || 1) : NaN;
-};
-const tint = (from, to) => {
-  const before = [...from.querySelectorAll(NUMS)].map(el => el.textContent.trim());
-  to.querySelectorAll(NUMS).forEach((el, i) => {
-    const a = before[i], b = el.textContent.trim();
-    if (a !== undefined && a !== b) el.classList.add(value(b) < value(a) ? 'moved-down' : 'moved-up');
-  });
-};
-// Swapped-in content shows at once; only user switches fade (see style.css).
-const calm = el => { el.classList.add('calm'); setTimeout(() => el.classList.remove('calm'), 60); };
-syncPressed();
-let etag = '', last = Date.now();
-const refresh = async () => {
-  last = Date.now();
-  try {
-    const res = await fetch(location.href, {cache: 'no-cache'});
-    const tag = res.headers.get('etag');
-    if (!res.ok || (tag && tag === etag)) return;
-    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-    const main = doc.getElementById('main');
-    if (!main) return;
-    applyPicks(main);
-    // Swap in fresh data for the chart view on screen before the page changes.
-    frags.clear();
-    const nf = main.querySelector('.cmp-frag');
-    if (nf && nf.dataset.key !== chartKey()) {
-      const html = await fetchFrag(chartKey());
-      if (html) nf.outerHTML = html;
-    }
-    // Numbers that moved since the last minute get a brief up/down tint.
-    tint(document.getElementById('main'), main);
-    const tk = doc.getElementById('ticker'), old = document.getElementById('ticker');
-    if (tk && old) tint(old, tk);
-    calm(main);
-    main.style.animation = 'none';
-    document.getElementById('main').replaceWith(main);
-    if (tk && old) { calm(tk); old.replaceWith(tk); }
-    const ep = doc.getElementById('ethpill'), oldEp = document.getElementById('ethpill');
-    if (ep && oldEp) { tint(oldEp, ep); oldEp.replaceWith(ep); }
-    loadChart();
-    etag = tag;
-  } catch {}
-};
-setInterval(() => { if (!document.hidden) refresh(); }, 60000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - last >= 60000) refresh(); });
-</script>
+{{template "livejs"}}
 </body>
 </html>
 
+{{define "rangeseg"}}<div class="seg" id="range">
+  <button data-r="24h">24h</button><button data-r="7d">7d</button><button data-r="30d">30d</button><button data-r="all">All</button>
+</div>{{end}}
+
+{{define "bigstats"}}{{range .}}
+<div class="big r-{{.Key}}">
+  <div><b>{{usd .Volume}}</b><small>Volume {{if .HasDelta}}{{delta .DVolume}}{{end}}</small></div>
+  <div><b>{{k .Launches}}</b><small>Launches {{if .HasDelta}}{{delta .DLaunches}}{{end}}</small></div>
+  <div><b>{{usd .Fees}}</b><small>Fees {{if .HasDelta}}{{delta .DFees}}{{end}}</small></div>
+  <div><b>{{usd .Protocol}}</b><small>Revenue {{if .HasDelta}}{{delta .DProtocol}}{{end}}</small></div>
+</div>
+{{end}}{{end}}
+
 {{define "pickpads"}}{{range .}}<button data-k="{{.Key}}" class="p{{.Idx}}" data-tip="{{.Name}}" aria-label="{{.Name}}"><img src="{{.Logo}}" alt=""></button>{{end}}{{end}}
 
-{{define "cmpfrag"}}<div class="cmp-frag" data-key="{{.Range}}|{{.Key}}|{{if .Share}}share{{else}}abs{{end}}">
+{{define "cmpfrag"}}<div class="cmp-frag" data-key="{{.Range}}|{{.Key}}|{{if .Share}}share{{else}}abs{{end}}|{{.Pad}}">
   <div class="chart-total"><b>{{.Total}}</b><small>{{.Label}}{{if .Share}} share{{end}}, {{.RangeLabel}}</small></div>
-  <p class="clegend">{{range .Legend}}<span class="p{{.Idx}}"><img src="{{.Logo}}" alt="">{{.Name}}<b>{{.Text}}</b></span>{{end}}</p>
+  <p class="clegend">{{range .Legend}}<a class="p{{.Idx}}" href="/p/{{.Key}}"><img src="{{.Logo}}" alt="">{{.Name}}<b>{{.Text}}</b></a>{{end}}</p>
   {{.SVG}}
 </div>{{end}}
+
+{{define "trading"}}{{$c := .}}
+{{range .Ranges}}
+<div class="r-{{.Key}} rblock">
+  <p class="cap first">{{$c.Name}}, {{if eq .Key "all"}}all time{{else}}last {{.Label}}{{end}}</p>
+  <div class="trio">
+    <div><b>{{k .Trades}}</b><small>Trades{{if .HasDelta}} {{delta .DTrades}}{{end}}</small></div>
+    <div><b>{{k .Launches}}</b><small>Launches{{if .HasDelta}} {{delta .DLaunches}}{{end}}</small></div>
+    <div><b>{{usd .AvgTrade}}</b><small>Average trade</small></div>
+  </div>
+</div>
+{{end}}
+<p class="cap">Volume by pair, all time</p>
+{{template "segbar" .QuoteShares}}
+<p class="cap">Launches, by what they are paired with</p>
+{{template "segbar" .LaunchShares}}
+<p class="cap">Launches per day, last 30 days</p>
+<div class="strip">{{.LaunchStrip}}</div>
+<div class="facts">
+  {{range .Milestones}}<div><b>{{.Days}}d</b><small>to {{.Mark}} volume</small></div>{{end}}
+  <div><b>{{k .Tokens}}</b><small>tokens launched</small></div>
+  <div><b>{{k .All.Trades}}</b><small>trades, all time</small></div>
+  {{if .HasGraduation}}<div><b>{{k .All.Graduations}}</b><small>graduated</small></div>{{end}}
+</div>
+<p class="note">{{.GraduationNote}} {{pct .UnpricedPct}} of swaps have no USD price for their quote asset; {{pct .SpotPct}} are priced at spot rather than hourly.</p>
+{{end}}
+
+{{define "fees"}}{{$c := .}}
+<p class="cap first">Where {{.Name}}'s fees went, all time</p>
+{{template "segbar" .FeeSplit}}
+<p class="cap">Fees paid out so far</p>
+{{template "segbar" .PaidSplit}}
+<div class="mscroll">
+<table class="months compact">
+  <thead><tr><th>Month</th><th class="r">Fees</th><th class="r">Creators</th>{{if .HasHolders}}<th class="r">Holders</th>{{end}}{{if .HasPartners}}<th class="r">Partners</th>{{end}}<th class="r">Protocol</th>{{if .HasLaunchFee}}<th class="r">Launch fees</th>{{end}}</tr></thead>
+  <tbody>
+  {{range .Months}}<tr><td>{{.Label}}</td><td class="r">{{usd .Fees}}</td><td class="r">{{usd .Creators}}</td>{{if $c.HasHolders}}<td class="r">{{usd .Holders}}</td>{{end}}{{if $c.HasPartners}}<td class="r">{{usd .Partners}}</td>{{end}}<td class="r">{{usd .Protocol}}</td>{{if $c.HasLaunchFee}}<td class="r">{{usd .LaunchFees}}</td>{{end}}</tr>{{end}}
+  </tbody>
+</table>
+</div>
+<p class="note">{{.FeeNote}}</p>
+{{end}}
+
+{{define "ptokrow"}}
+<tr class="p{{.Idx}}">
+  <td><a class="coin" href="/t/{{.Token.Address}}">{{icon .Token.Image .Token.Symbol}}<span><b>${{.Token.Symbol}}</b><small>{{.Name}}</small></span></a></td>
+  {{if .Token.HasPrice}}
+  <td class="r num"><b>{{price .Token.Price}}</b><small>{{delta .Token.Change24}}</small></td>
+  <td class="r num">{{usd .Token.FDV}}</td>
+  <td class="r num">{{usd .Token.Mcap}}<small>ex-burned</small></td>
+  <td class="r num">{{pct2 .Token.BurnedPct}}<small>{{usd .Token.BurnedValue}}</small></td>
+  {{else}}<td class="r muted" colspan="4">no swaps yet</td>{{end}}
+</tr>
+{{end}}
 
 {{define "coins"}}
 <div class="scroll">
@@ -330,7 +210,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && Da
   {{range .}}
   <tr>
     <td class="rk">{{.Rank}}</td>
-    <td><a class="coin" href="https://etherscan.io/token/{{.Address}}" target="_blank" rel="noopener">{{icon .Image .Symbol}}<span><b>{{.Symbol}}</b><small><img class="padmini" src="{{.Pad.Logo}}" alt="" data-tip="{{.Pad.Name}}">{{.Name}}</small></span></a></td>
+    <td><a class="coin" href="/t/{{.Address}}">{{icon .Image .Symbol}}<span><b>{{.Symbol}}</b><small><img class="padmini" src="{{.Pad.Logo}}" alt="" data-tip="{{.Pad.Name}}">{{.Name}}</small></span></a></td>
     <td class="c"><span class="pair" title="Paired with {{.QuoteSymbol}}" data-tip="Paired with {{.QuoteSymbol}}">{{icon .QuoteLogo .QuoteSymbol}}</span></td>
     <td class="r num"><b>{{usd .VolUSD}}</b></td>
     <td class="r num muted">{{usd .FDV}}</td>
