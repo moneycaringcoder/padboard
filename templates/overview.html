@@ -11,6 +11,28 @@
 <p class="muted">First sync is reading mainnet logs — refresh in a minute.</p>
 {{else}}
 
+<!-- Every launchpad at a glance, floating above the leaderboard; follows the range toggle -->
+<div class="quad">
+{{range .Columns}}
+<section class="padk p{{.Idx}}" id="pad-{{.Key}}">
+  <header class="pad-head">
+    <img class="plogo" src="{{.Logo}}" alt="">
+    <div class="pn"><h2>{{.Name}}</h2><a href="{{.Site}}" target="_blank" rel="noopener">{{host .Site}} ↗</a></div>
+    {{if lt .Progress 100.0}}<span class="sync">indexing {{pct .Progress}}</span>{{end}}
+    <a class="more-link" href="/tokens?pad={{.Key}}">{{k .Tokens}} tokens →</a>
+  </header>
+  {{range .Ranges}}
+  <div class="big r-{{.Key}}">
+    <div><b>{{usd .Volume}}</b><small>Volume {{if .HasDelta}}{{delta .DVolume}}{{end}}</small></div>
+    <div><b>{{k .Launches}}</b><small>Launches {{if .HasDelta}}{{delta .DLaunches}}{{end}}</small></div>
+    <div><b>{{usd .Fees}}</b><small>Fees {{if .HasDelta}}{{delta .DFees}}{{end}}</small></div>
+    <div><b>{{usd .Protocol}}</b><small>Protocol revenue {{if .HasDelta}}{{delta .DProtocol}}{{end}}</small></div>
+  </div>
+  {{end}}
+</section>
+{{end}}
+</div>
+
 <!-- Leaderboard: every launchpad, follows the range toggle; dominance donut on the right -->
 <section class="card board">
   <div class="board-main">
@@ -52,139 +74,105 @@
     {{range .Board}}
     <figure class="dn r-{{.Key}}">
       {{.Donut}}
-      <figcaption>{{range .Rows}}<span class="p{{.Idx}}"><i></i>{{.Name}}<b>{{pct .Share}}</b></span>{{end}}</figcaption>
+      <figcaption>{{range .Rows}}<span class="p{{.Idx}}"><img src="{{.Logo}}" alt="">{{.Name}}<b>{{pct .Share}}</b></span>{{end}}</figcaption>
     </figure>
     {{end}}
   </aside>
 </section>
 
-<!-- Any two, side by side -->
-<h2 class="sect" id="cmp">Side by side</h2>
-<div class="cols">
-{{range .Columns}}
-<section class="col p{{.Idx}}">{{$c := .}}
-  <header class="pad-head">
-    <img class="plogo" src="{{.Logo}}" alt="">
-    <div class="pn"><h2>{{.Name}}</h2><a href="{{.Site}}" target="_blank" rel="noopener">{{host .Site}} ↗</a></div>
-    {{if lt .Progress 100.0}}<span class="sync">indexing {{pct .Progress}}</span>{{end}}
-    <nav class="pick" aria-label="Compare another launchpad">{{range .Pick}}<a href="{{.Href}}" class="p{{.Idx}}{{if .On}} on{{end}}" data-tip="{{.Name}}" aria-label="{{.Name}}"><img src="{{.Logo}}" alt=""></a>{{end}}</nav>
-  </header>
-
-  <!-- Range stats -->
-  {{range .Ranges}}
-  <div class="big r-{{.Key}}">
-    <div><b>{{usd .Volume}}</b><small>Volume {{if .HasDelta}}{{delta .DVolume}}{{end}}</small></div>
-    <div><b>{{k .Launches}}</b><small>Launches {{if .HasDelta}}{{delta .DLaunches}}{{end}}</small></div>
-    <div><b>{{usd .Fees}}</b><small>Fees {{if .HasDelta}}{{delta .DFees}}{{end}}</small></div>
-    <div><b>{{usd .Protocol}}</b><small>Protocol revenue {{if .HasDelta}}{{delta .DProtocol}}{{end}}</small></div>
+<!-- Every launchpad on one chart: metric tabs, window from the range toggle -->
+<section class="card chart-card cmpc" data-chart="volume">
+  <div class="cmp-head">
+    <div class="cmp-tot">{{range $r := .Compare}}<div class="rblock r-{{.Key}}">{{range .Charts}}<div class="chart-total c-{{.Key}}"><b>{{.Total}}</b><small>{{.Label}}, {{$r.Label}}</small></div>{{end}}</div>{{end}}</div>
+    <div class="seg tabs">{{range (index .Compare 0).Charts}}<button data-c="{{.Key}}"{{if eq .Key "volume"}} class="on"{{end}}>{{.Label}}</button>{{end}}</div>
   </div>
-  {{end}}
-
-  <!-- Chart card -->
-  <div class="card chart-card" data-chart="volume">
-    <div class="chart-head">
-      {{range .Charts}}<div class="chart-total c-{{.Key}}"><b>{{.Total}}</b><small>{{.Label}}, {{$c.Days}} days</small></div>{{end}}
-      <div class="seg tabs">{{range .Charts}}<button data-c="{{.Key}}"{{if eq .Key "volume"}} class="on"{{end}}>{{.Label}}</button>{{end}}</div>
-    </div>
-    {{range .Charts}}<div class="chart-body c-{{.Key}}">{{.SVG}}</div>{{end}}
-  </div>
-
-  <!-- Trading, follows the range toggle -->
-  <div class="card">
-    {{range .Ranges}}
-    <div class="r-{{.Key}} rblock">
-      <h3>Trading, {{if eq .Key "all"}}all time{{else}}last {{.Label}}{{end}}</h3>
-      <div class="trio">
-        <div><b>{{k .Trades}}</b><small>Trades{{if .HasDelta}} {{delta .DTrades}}{{end}}</small></div>
-        <div><b>{{k .Launches}}</b><small>Launches{{if .HasDelta}} {{delta .DLaunches}}{{end}}</small></div>
-        <div><b>{{usd .AvgTrade}}</b><small>Average trade</small></div>
-      </div>
-    </div>
-    {{end}}
-    <p class="cap">Volume by pair, all time, on {{.Name}} pools</p>
-    {{template "segbar" .QuoteShares}}
-    <p class="cap">Launches, by what they are paired with</p>
-    {{template "segbar" .LaunchShares}}
-  </div>
-
-  <!-- Top coins -->
-  <div class="card">
-    <h3>Top coins, all time</h3>
-    <div class="scroll">
-    <table class="coins compact">
-      <thead><tr><th>#</th><th>Coin</th><th class="c" title="Paired with">Pair</th><th class="r">Volume</th><th class="r">FDV</th><th class="r">Trades</th></tr></thead>
-      <tbody>
-      {{range .TopCoins}}
-      <tr>
-        <td class="rk">{{.Rank}}</td>
-        <td><a class="coin" href="https://etherscan.io/token/{{.Address}}" target="_blank" rel="noopener">{{icon .Image .Symbol}}<span><b>{{.Symbol}}</b><small>{{.Name}}</small></span></a></td>
-        <td class="c"><span class="pair" title="Paired with {{.QuoteSymbol}}" data-tip="Paired with {{.QuoteSymbol}}">{{icon .QuoteLogo .QuoteSymbol}}</span></td>
-        <td class="r num"><b>{{usd .VolUSD}}</b></td>
-        <td class="r num muted">{{usd .FDV}}</td>
-        <td class="r num muted">{{k .Swaps}}</td>
-      </tr>
-      {{end}}
-      </tbody>
-    </table>
-    </div>
-  </div>
-
-  <!-- Fees and revenue -->
-  <div class="card">
-    <h3>Fees and revenue</h3>
-    <p class="cap">Where the fees went, all time</p>
-    {{template "segbar" .FeeSplit}}
-    <table class="months">
-      <thead><tr><th>Month</th><th class="r">Fees</th><th class="r">Creators</th>{{if .HasHolders}}<th class="r">Holders</th>{{end}}{{if .HasPartners}}<th class="r">Partners</th>{{end}}<th class="r">Protocol</th>{{if .HasLaunchFee}}<th class="r">Launch fees</th>{{end}}</tr></thead>
-      <tbody>
-      {{range .Months}}<tr><td>{{.Label}}</td><td class="r">{{usd .Fees}}</td><td class="r">{{usd .Creators}}</td>{{if $c.HasHolders}}<td class="r">{{usd .Holders}}</td>{{end}}{{if $c.HasPartners}}<td class="r">{{usd .Partners}}</td>{{end}}<td class="r">{{usd .Protocol}}</td>{{if $c.HasLaunchFee}}<td class="r">{{usd .LaunchFees}}</td>{{end}}</tr>{{end}}
-      </tbody>
-    </table>
-    <p class="note">{{.FeeNote}}</p>
-  </div>
-
-  <!-- Platform token -->
-  <div class="card">
-    {{if .Token.Symbol}}
-    <h3 class="with-ico">{{icon .Token.Image .Token.Symbol}}${{.Token.Symbol}} buyback and burn</h3>
-    {{if .Token.HasPrice}}
-    <div class="trio">
-      <div><b>{{k .Token.Burned}}</b><small>{{.Token.Symbol}} burned</small></div>
-      <div><b>{{usd .Token.BurnedValue}}</b><small>Value</small></div>
-      <div><b>{{pct2 .Token.BurnedPct}}</b><small>Of supply</small></div>
-    </div>
-    <div class="trio sub">
-      <div><b>{{price .Token.Price}}</b><small>Price {{delta .Token.Change24}}</small></div>
-      <div><b>{{usd .Token.FDV}}</b><small>FDV</small></div>
-      <div><b>{{usd .Token.Mcap}}</b><small>Market cap, ex-burned</small></div>
-    </div>
-    {{else}}<p class="muted">No swaps observed for {{.Token.Symbol}} yet.</p>{{end}}
-    <p class="note">Burned is the balance at 0x…dEaD read at the last sync; price is the last swap on the {{.Token.Symbol}} pool.</p>
-    {{else}}
-    <h3>No platform token</h3>
-    <p class="muted">{{.Name}} has no tradable platform token on Ethereum, so there is no buyback, burn or valuation to track. Protocol revenue above is what the contracts route to the platform.</p>
-    {{end}}
-  </div>
-
-  <div class="card">
-    <h3>All time</h3>
-    <div class="trio">
-      <div><b>{{usd .All.Volume}}</b><small>Volume</small></div>
-      <div><b>{{usd .All.Fees}}</b><small>Fees</small></div>
-      <div><b>{{usd .All.Protocol}}</b><small>Protocol revenue</small></div>
-    </div>
-    <p class="cap">Fees paid out so far</p>
-    {{template "segbar" .PaidSplit}}
-    <p class="chips">
-      {{range .Milestones}}<span>{{.}}</span>{{end}}
-      <span>{{k .Tokens}} tokens launched</span>
-      <span>{{k .All.Trades}} trades</span>
-      {{if .HasGraduation}}<span>{{.All.Graduations}} graduated</span>{{end}}
-    </p>
-    <p class="note">{{.GraduationNote}} {{pct .UnpricedPct}} of swaps have no USD price for their quote asset; {{pct .SpotPct}} are priced at spot rather than hourly.</p>
-  </div>
+  {{range .Compare}}<div class="rblock r-{{.Key}}">{{range .Charts}}
+  <div class="chart-body c-{{.Key}}">
+    <p class="clegend">{{range .Legend}}<span class="p{{.Idx}}"><img src="{{.Logo}}" alt="">{{.Name}}<b>{{.Text}}</b></span>{{end}}</p>
+    {{.SVG}}
+  </div>{{end}}</div>{{end}}
 </section>
-{{end}}
+
+<!-- Detail cards: each picks its launchpad -->
+<div class="duo">
+  <section class="card pickable" data-card="coins">
+    <header class="ph"><h3>Top coins, all time</h3>
+      <nav class="pick"><button data-k="all" class="all">All</button>{{template "pickpads" .Columns}}</nav>
+    </header>
+    <div data-v="all">{{template "coins" .TopAll}}</div>
+    {{range .Columns}}<div data-v="{{.Key}}" hidden>{{template "coins" .TopCoins}}</div>{{end}}
+  </section>
+
+  <section class="card pickable" data-card="trading">
+    <header class="ph"><h3>Trading</h3><nav class="pick">{{template "pickpads" .Columns}}</nav></header>
+    {{range $i, $c := .Columns}}
+    <div data-v="{{.Key}}" class="pv p{{.Idx}}"{{if $i}} hidden{{end}}>
+      {{range .Ranges}}
+      <div class="r-{{.Key}} rblock">
+        <p class="cap first">{{$c.Name}}, {{if eq .Key "all"}}all time{{else}}last {{.Label}}{{end}}</p>
+        <div class="trio">
+          <div><b>{{k .Trades}}</b><small>Trades{{if .HasDelta}} {{delta .DTrades}}{{end}}</small></div>
+          <div><b>{{k .Launches}}</b><small>Launches{{if .HasDelta}} {{delta .DLaunches}}{{end}}</small></div>
+          <div><b>{{usd .AvgTrade}}</b><small>Average trade</small></div>
+        </div>
+      </div>
+      {{end}}
+      <p class="cap">Volume by pair, all time</p>
+      {{template "segbar" .QuoteShares}}
+      <p class="cap">Launches, by what they are paired with</p>
+      {{template "segbar" .LaunchShares}}
+      <p class="chips">
+        {{range .Milestones}}<span>{{.}}</span>{{end}}
+        <span>{{k .Tokens}} tokens launched</span>
+        <span>{{k .All.Trades}} trades</span>
+        {{if .HasGraduation}}<span>{{.All.Graduations}} graduated</span>{{end}}
+      </p>
+      <p class="note">{{.GraduationNote}} {{pct .UnpricedPct}} of swaps have no USD price for their quote asset; {{pct .SpotPct}} are priced at spot rather than hourly.</p>
+    </div>
+    {{end}}
+  </section>
+
+  <section class="card pickable" data-card="fees">
+    <header class="ph"><h3>Fees and revenue</h3><nav class="pick">{{template "pickpads" .Columns}}</nav></header>
+    {{range $i, $c := .Columns}}
+    <div data-v="{{.Key}}" class="pv p{{.Idx}}"{{if $i}} hidden{{end}}>
+      <p class="cap first">Where {{.Name}}'s fees went, all time</p>
+      {{template "segbar" .FeeSplit}}
+      <p class="cap">Fees paid out so far</p>
+      {{template "segbar" .PaidSplit}}
+      <div class="mscroll">
+      <table class="months">
+        <thead><tr><th>Month</th><th class="r">Fees</th><th class="r">Creators</th>{{if .HasHolders}}<th class="r">Holders</th>{{end}}{{if .HasPartners}}<th class="r">Partners</th>{{end}}<th class="r">Protocol</th>{{if .HasLaunchFee}}<th class="r">Launch fees</th>{{end}}</tr></thead>
+        <tbody>
+        {{range .Months}}<tr><td>{{.Label}}</td><td class="r">{{usd .Fees}}</td><td class="r">{{usd .Creators}}</td>{{if $c.HasHolders}}<td class="r">{{usd .Holders}}</td>{{end}}{{if $c.HasPartners}}<td class="r">{{usd .Partners}}</td>{{end}}<td class="r">{{usd .Protocol}}</td>{{if $c.HasLaunchFee}}<td class="r">{{usd .LaunchFees}}</td>{{end}}</tr>{{end}}
+        </tbody>
+      </table>
+      </div>
+      <p class="note">{{.FeeNote}}</p>
+    </div>
+    {{end}}
+  </section>
+
+  <section class="card ptokc">
+    <header class="ph"><h3>Platform tokens</h3></header>
+    <table class="ptok">
+      <thead><tr><th>Token</th><th class="r">Price</th><th class="r">FDV</th><th class="r">Market cap</th><th class="r">Burned</th></tr></thead>
+      <tbody>
+      {{range .Columns}}{{if .Token.Symbol}}
+      <tr class="p{{.Idx}}">
+        <td><span class="coin">{{icon .Token.Image .Token.Symbol}}<span><b>${{.Token.Symbol}}</b><small>{{.Name}}</small></span></span></td>
+        {{if .Token.HasPrice}}
+        <td class="r num"><b>{{price .Token.Price}}</b><small>{{delta .Token.Change24}}</small></td>
+        <td class="r num">{{usd .Token.FDV}}</td>
+        <td class="r num">{{usd .Token.Mcap}}<small>ex-burned</small></td>
+        <td class="r num">{{pct2 .Token.BurnedPct}}<small>{{usd .Token.BurnedValue}}</small></td>
+        {{else}}<td class="r muted" colspan="4">no swaps yet</td>{{end}}
+      </tr>
+      {{end}}{{end}}
+      </tbody>
+    </table>
+    <p class="note">Burned is the balance at 0x…dEaD read at the last sync; price is the last swap on the token's own pool. No platform token: {{range .Columns}}{{if not .Token.Symbol}}<span class="lst">{{.Name}}</span>{{end}}{{end}}.</p>
+  </section>
 </div>
 
 {{template "foot" .}}
@@ -193,11 +181,30 @@
 {{template "dock" .}}
 
 <script>
+// Per-card launchpad pickers; choices persist across reloads and live refreshes.
+let picks = {};
+try { picks = JSON.parse(localStorage.getItem('picks') || '{}'); } catch {}
+const pickIn = (card, k) => {
+  if (!card.querySelector(`[data-v="${k}"]`)) return;
+  card.querySelectorAll('[data-v]').forEach(v => v.hidden = v.dataset.v !== k);
+  card.querySelectorAll('.pick [data-k]').forEach(b => b.classList.toggle('on', b.dataset.k === k));
+};
+const applyPicks = root => root.querySelectorAll('.pickable').forEach(c =>
+  pickIn(c, picks[c.dataset.card] || c.querySelector('[data-v]:not([hidden])').dataset.v));
+applyPicks(document);
 document.addEventListener('click', e => {
   const r = e.target.closest('#range button');
   if (r) {
     document.body.dataset.range = r.dataset.r;
     try { localStorage.setItem('range', r.dataset.r); } catch {}
+    return;
+  }
+  const p = e.target.closest('.pickable .pick [data-k]');
+  if (p) {
+    const card = p.closest('.pickable');
+    pickIn(card, p.dataset.k);
+    picks[card.dataset.card] = p.dataset.k;
+    try { localStorage.setItem('picks', JSON.stringify(picks)); } catch {}
     return;
   }
   const c = e.target.closest('.chart-card button[data-c]');
@@ -207,7 +214,7 @@ document.addEventListener('click', e => {
   }
 });
 // Live: re-fetch every minute while the tab is visible and swap the ticker and
-// <main> in place, keeping each column's chart tab; unchanged pages (same ETag)
+// <main> in place, keeping chart tabs and picks; unchanged pages (same ETag)
 // are skipped. Hidden tabs catch up as soon as they are shown.
 let etag = '', last = Date.now();
 const refresh = async () => {
@@ -225,6 +232,7 @@ const refresh = async () => {
       c.dataset.chart = tabs[i];
       c.querySelectorAll('button[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === tabs[i]));
     });
+    applyPicks(main);
     main.style.animation = 'none';
     document.getElementById('main').replaceWith(main);
     const tk = doc.getElementById('ticker');
@@ -237,6 +245,28 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && Da
 </script>
 </body>
 </html>
+
+{{define "pickpads"}}{{range .}}<button data-k="{{.Key}}" class="p{{.Idx}}" data-tip="{{.Name}}" aria-label="{{.Name}}"><img src="{{.Logo}}" alt=""></button>{{end}}{{end}}
+
+{{define "coins"}}
+<div class="scroll">
+<table class="coins compact">
+  <thead><tr><th>#</th><th>Coin</th><th class="c" title="Paired with">Pair</th><th class="r">Volume</th><th class="r">FDV</th><th class="r">Trades</th></tr></thead>
+  <tbody>
+  {{range .}}
+  <tr>
+    <td class="rk">{{.Rank}}</td>
+    <td><a class="coin" href="https://etherscan.io/token/{{.Address}}" target="_blank" rel="noopener">{{icon .Image .Symbol}}<span><b>{{.Symbol}}</b><small><img class="padmini" src="{{.Pad.Logo}}" alt="" data-tip="{{.Pad.Name}}">{{.Name}}</small></span></a></td>
+    <td class="c"><span class="pair" title="Paired with {{.QuoteSymbol}}" data-tip="Paired with {{.QuoteSymbol}}">{{icon .QuoteLogo .QuoteSymbol}}</span></td>
+    <td class="r num"><b>{{usd .VolUSD}}</b></td>
+    <td class="r num muted">{{usd .FDV}}</td>
+    <td class="r num muted">{{k .Swaps}}</td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
 
 {{define "segbar"}}
 <div class="segbar">{{range .}}<i class="{{.Class}}" style="width:{{printf "%.2f" .Pct}}%"></i>{{end}}</div>

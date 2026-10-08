@@ -31,7 +31,7 @@
       <th class="r">Status</th>
     </tr></thead>
     <tbody>
-    {{range .Table.Rows}}{{$p := index $.Table.PlatformOf .Platform}}
+    {{range .Table.Rows}}{{$p := .Pad}}
     <tr>
       <td class="rk">{{.Rank}}</td>
       <td><a class="coin" href="https://etherscan.io/token/{{.Address}}" target="_blank" rel="noopener">{{icon .Image .Symbol}}<span><b>{{.Symbol}}</b><small>{{.Name}}</small></span></a></td>

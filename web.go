@@ -195,7 +195,7 @@ func (c *collector) routes() http.Handler {
 			}
 		}))
 	}
-	mux.Handle("/{$}", page("overview.html", func(r *http.Request) pageView { return buildView(c.state, r.URL.Query()) }))
+	mux.Handle("/{$}", page("overview.html", func(*http.Request) pageView { return buildView(c.state) }))
 	mux.Handle("/charts", http.RedirectHandler("/", http.StatusMovedPermanently))
 	mux.Handle("/tokens", page("tokens.html", func(r *http.Request) pageView { return buildTokens(c.state, r) }))
 	mux.Handle("/api", page("api.html", func(r *http.Request) pageView {

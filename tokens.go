@@ -18,7 +18,6 @@ type tokenTable struct {
 	Total      int
 	Page, Last int
 	Pages      []int // page numbers to render
-	PlatformOf map[string]*platform
 }
 
 var tokenSorts = map[string]func(a, b *tokenRow) bool{
@@ -51,14 +50,11 @@ func queryTokens(s *State, q map[string][]string) tokenTable {
 		}
 		return ""
 	}
-	t := tokenTable{Sort: get("sort"), Pad: get("pad"), Query: strings.TrimSpace(get("q")), Page: 1, PlatformOf: map[string]*platform{}}
+	t := tokenTable{Sort: get("sort"), Pad: get("pad"), Query: strings.TrimSpace(get("q")), Page: 1}
 	if tokenSorts[t.Sort] == nil {
 		t.Sort = "volume"
 	}
 	fmt.Sscan(get("page"), &t.Page)
-	for _, p := range platforms {
-		t.PlatformOf[p.Key] = p
-	}
 	needle := strings.ToLower(t.Query)
 	for _, tok := range s.Tokens {
 		if t.Pad != "" && tok.Platform != t.Pad {
@@ -67,11 +63,7 @@ func queryTokens(s *State, q map[string][]string) tokenTable {
 		if needle != "" && !strings.Contains(strings.ToLower(tok.Symbol+" "+tok.Name+" "+tok.Address), needle) {
 			continue
 		}
-		row := tokenRow{Token: tok, QuoteSymbol: "?", QuoteLogo: logoOf(s.Quotes[tok.Quote]), FDV: tok.PriceUSD * tok.Supply}
-		if qq := s.Quotes[tok.Quote]; qq != nil && qq.Symbol != "" {
-			row.QuoteSymbol = qq.Symbol
-		}
-		t.Rows = append(t.Rows, row)
+		t.Rows = append(t.Rows, newTokenRow(s, tok))
 	}
 	less := tokenSorts[t.Sort]
 	sort.Slice(t.Rows, func(i, j int) bool { return less(&t.Rows[i], &t.Rows[j]) })

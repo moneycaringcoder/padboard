@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"html/template"
 	"math"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,6 +38,7 @@ type monthRow struct {
 
 type tokenRow struct {
 	*Token
+	Pad         *platform
 	Rank        int
 	QuoteSymbol string
 	QuoteLogo   string
@@ -53,16 +53,23 @@ type tokenCard struct {
 	HasPrice                  bool
 }
 
-type chartView struct {
-	Key, Label, Total string
-	SVG               template.HTML
+// compareChart is one metric for one window, every platform stacked.
+type compareChart struct {
+	Key, Label string // metric
+	Total      string
+	Legend     []legendItem
+	SVG        template.HTML
 }
 
-// pickLink switches one side-by-side column to another platform.
-type pickLink struct {
+type legendItem struct {
 	*platform
-	Href string
-	On   bool
+	Text string
+}
+
+// compareRange holds the comparison charts for one window of the range toggle.
+type compareRange struct {
+	Key, Label string
+	Charts     []compareChart
 }
 
 type column struct {
@@ -73,9 +80,6 @@ type column struct {
 	Token        tokenCard
 	Tokens       int
 	Progress     float64 // % of the platform's history indexed
-	Pick         []pickLink
-	Charts       []chartView
-	Days         int
 	QuoteShares  []segment
 	LaunchShares []segment
 	TopCoins     []tokenRow
@@ -97,7 +101,7 @@ type boardRow struct {
 	Share    float64 // % of all platforms' volume in the window
 	Spark    template.HTML
 	Progress float64
-	Href     string // bring this platform into the side-by-side
+	Href     string // the platform's tokens
 }
 
 type boardRange struct {
@@ -121,12 +125,14 @@ type pageView struct {
 	SyncedAt    time.Time
 	ETHUSD      float64
 	Empty       bool
-	Board       []boardRange // overview
-	Columns     []column     // overview: the side-by-side pair
-	Table       tokenTable   // tokens page
-	Pads        []*platform  // tokens page filter
-	Host        string       // api page
-	Origin      string       // scheme://host for canonical/og tags
+	Board       []boardRange   // overview: leaderboard
+	Columns     []column       // overview: every platform, in platform order
+	Compare     []compareRange // overview: stacked comparison charts per window
+	TopAll      []tokenRow     // overview: top coins across every platform
+	Table       tokenTable     // tokens page
+	Pads        []*platform    // tokens page filter
+	Host        string         // api page
+	Origin      string         // scheme://host for canonical/og tags
 	Path        string
 	Ticker      []tickerItem // today line, every page
 	Version     string       // cache-busting token for static assets
@@ -272,25 +278,7 @@ var assetVersion = func() string {
 	return fmt.Sprintf("%x", fnv32(b))
 }()
 
-// pair resolves the side-by-side selection from ?a=&b=, defaulting to the
-// first two platforms and never showing one platform twice.
-func pair(q url.Values) (a, b *platform) {
-	a, b = platformByKey(q.Get("a")), platformByKey(q.Get("b"))
-	if a == nil {
-		a = platforms[0]
-	}
-	if b == nil || b == a {
-		b = platforms[0]
-		if b == a {
-			b = platforms[1]
-		}
-	}
-	return a, b
-}
-
-func pairHref(a, b *platform) string { return "/?a=" + a.Key + "&b=" + b.Key + "#cmp" }
-
-func buildView(s *State, q url.Values) pageView {
+func buildView(s *State) pageView {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	byPad := hoursByPad(s)
@@ -300,36 +288,139 @@ func buildView(s *State, q url.Values) pageView {
 		return pv
 	}
 	now := time.Now().UTC()
-	a, b := pair(q)
-	pv.Board = board(s, byPad, now, a, b)
-	for side, p := range []*platform{a, b} {
-		col := buildColumn(s, p, byPad[p.Key], now, true)
-		other := b
-		if side == 1 {
-			other = a
-		}
-		for _, x := range platforms {
-			l := pickLink{platform: x, On: x == p}
-			switch {
-			case x == other && side == 0:
-				l.Href = pairHref(x, p) // picking the other side's pad swaps them
-			case x == other:
-				l.Href = pairHref(p, x)
-			case side == 0:
-				l.Href = pairHref(x, other)
-			default:
-				l.Href = pairHref(other, x)
-			}
-			col.Pick = append(col.Pick, l)
-		}
-		pv.Columns = append(pv.Columns, col)
+	pv.Board = board(s, byPad, now)
+	for _, p := range platforms {
+		pv.Columns = append(pv.Columns, buildColumn(s, p, byPad[p.Key], now, true))
 	}
+	pv.Compare = compare(byPad, now)
+	pv.TopAll = topCoins(s, "", 10)
 	return pv
+}
+
+// topCoins ranks launched tokens by all-time volume, for one platform or all ("").
+// Caller holds s.mu.
+func topCoins(s *State, pad string, n int) []tokenRow {
+	var toks []*Token
+	for _, t := range s.Tokens {
+		if pad == "" || t.Platform == pad {
+			toks = append(toks, t)
+		}
+	}
+	sort.Slice(toks, func(a, b int) bool { return toks[a].VolUSD > toks[b].VolUSD })
+	toks = toks[:min(n, len(toks))]
+	out := make([]tokenRow, len(toks))
+	for i, t := range toks {
+		out[i] = newTokenRow(s, t)
+		out[i].Rank = i + 1
+	}
+	return out
+}
+
+func newTokenRow(s *State, t *Token) tokenRow {
+	row := tokenRow{Token: t, Pad: platformByKey(t.Platform), QuoteSymbol: "?", QuoteLogo: logoOf(s.Quotes[t.Quote]), FDV: t.PriceUSD * t.Supply}
+	if q := s.Quotes[t.Quote]; q != nil && q.Symbol != "" {
+		row.QuoteSymbol = q.Symbol
+	}
+	return row
+}
+
+// compare builds, per window of the range toggle, one stacked chart per metric
+// with every platform: hourly bars for 24h, 6-hour for 7d, daily for 30d and
+// weekly (from Monday) for all time.
+func compare(byPad map[string][]hourAgg, now time.Time) []compareRange {
+	const hour, day, week = 3600, 86400, 7 * 86400
+	nowU := now.Unix()
+	first := nowU
+	for _, hs := range byPad {
+		if len(hs) > 0 {
+			first = min(first, hs[0].H)
+		}
+	}
+	floor := func(t, step, offset int64) int64 { return t - (t-offset)%step }
+	monday := int64(4 * day) // 1970-01-05
+	windows := []struct {
+		key, label, layout string
+		step, offset, from int64
+	}{
+		{"24h", "last 24 hours", "15h", hour, 0, floor(nowU, hour, 0) - 23*hour},
+		{"7d", "last 7 days", "Jan 2 15h", 6 * hour, 0, floor(nowU, 6*hour, 0) - 27*6*hour},
+		{"30d", "last 30 days", "Jan 2", day, 0, floor(nowU, day, 0) - 29*day},
+		{"all", "all time, weekly", "Jan 2", week, monday, floor(first, week, monday)},
+	}
+	metrics := []struct {
+		key, label string
+		f          func(*Agg) float64
+		fy         func(float64) string
+	}{
+		{"volume", "Volume", func(a *Agg) float64 { return a.VolUSD }, fmtUSD},
+		{"launches", "Launches", func(a *Agg) float64 { return float64(a.Launches) }, fmtK},
+		{"fees", "Fees", func(a *Agg) float64 { return fees(*a) }, fmtUSD},
+		{"revenue", "Revenue", func(a *Agg) float64 { return a.PlatformUSD + a.LaunchFees }, fmtUSD},
+		{"trades", "Trades", func(a *Agg) float64 { return float64(a.Swaps) }, fmtK},
+	}
+	var out []compareRange
+	for _, w := range windows {
+		n := int((floor(nowU, w.step, w.offset)-w.from)/w.step) + 1
+		labels := make([]string, n)
+		for j := range labels {
+			labels[j] = time.Unix(w.from+int64(j)*w.step, 0).UTC().Format(w.layout)
+		}
+		// series[metric][platform][bucket]
+		series := make([][][]float64, len(metrics))
+		for m := range metrics {
+			series[m] = make([][]float64, len(platforms))
+			for i := range platforms {
+				series[m][i] = make([]float64, n)
+			}
+		}
+		for i, p := range platforms {
+			for _, x := range byPad[p.Key] {
+				if x.H < w.from {
+					continue
+				}
+				j := int((x.H - w.from) / w.step)
+				if j >= n {
+					break
+				}
+				for m, mt := range metrics {
+					series[m][i][j] += mt.f(x.A)
+				}
+			}
+		}
+		cr := compareRange{Key: w.key, Label: w.label}
+		for m, mt := range metrics {
+			// Stack and list platforms largest first for this metric and window.
+			totals := make([]float64, len(platforms))
+			sum := 0.0
+			for i := range platforms {
+				for _, v := range series[m][i] {
+					totals[i] += v
+				}
+				sum += totals[i]
+			}
+			order := make([]int, len(platforms))
+			for i := range order {
+				order[i] = i
+			}
+			sort.SliceStable(order, func(a, b int) bool { return totals[order[a]] > totals[order[b]] })
+			pads := make([]*platform, len(order))
+			vals := make([][]float64, len(order))
+			cc := compareChart{Key: mt.key, Label: mt.label, Total: mt.fy(sum)}
+			for k, i := range order {
+				pads[k], vals[k] = platforms[i], series[m][i]
+				cc.Legend = append(cc.Legend, legendItem{platforms[i], mt.fy(totals[i])})
+			}
+			cc.SVG = stacked(vals, pads, labels, mt.fy)
+			cr.Charts = append(cr.Charts, cc)
+		}
+		out = append(out, cr)
+	}
+	return out
 }
 
 // board ranks every platform per window by volume, with its share of the
 // combined volume and a 30-day volume sparkline.
-func board(s *State, byPad map[string][]hourAgg, now time.Time, a, b *platform) []boardRange {
+func board(s *State, byPad map[string][]hourAgg, now time.Time) []boardRange {
 	nowU := now.Unix()
 	stats := make([][]rangeStats, len(platforms))
 	sparks := make([]template.HTML, len(platforms))
@@ -355,11 +446,7 @@ func board(s *State, byPad map[string][]hourAgg, now time.Time, a, b *platform) 
 			br.Total.Protocol += r.Protocol
 			br.Total.Trades += r.Trades
 			br.Total.Launches += r.Launches
-			href := pairHref(p, a) // bring it in next to the left column's pad
-			if p == a || p == b {
-				href = "#cmp"
-			}
-			br.Rows = append(br.Rows, boardRow{platform: p, Stats: r, Spark: sparks[i], Progress: progress(s, p), Href: href})
+			br.Rows = append(br.Rows, boardRow{platform: p, Stats: r, Spark: sparks[i], Progress: progress(s, p), Href: "/tokens?pad=" + p.Key})
 		}
 		for i := range br.Rows {
 			if br.Total.Volume > 0 {
@@ -410,9 +497,8 @@ func buildColumn(s *State, p *platform, hs []hourAgg, now time.Time, detail bool
 	}
 	col.Token = tc
 
-	// Tokens: quote classification, launches split, top coins.
+	// Tokens: quote classification and launches split.
 	var qv, lc [4]float64
-	var toks []tokenRow
 	for _, t := range s.Tokens {
 		if t.Platform != p.Key {
 			continue
@@ -428,7 +514,6 @@ func buildColumn(s *State, p *platform, hs []hourAgg, now time.Time, detail bool
 		c := quoteClass(t.Quote, sym)
 		qv[c] += t.VolUSD
 		lc[c]++
-		toks = append(toks, tokenRow{Token: t, QuoteSymbol: sym, QuoteLogo: logoOf(s.Quotes[t.Quote]), FDV: t.PriceUSD * t.Supply})
 	}
 	if !detail {
 		return col
@@ -437,40 +522,8 @@ func buildColumn(s *State, p *platform, hs []hourAgg, now time.Time, detail bool
 	classes := [4]string{"c-eth", "c-stock", "c-stable", "c-other"}
 	col.QuoteShares = nonZero(segments(names[:], classes[:], qv[:], fmtUSD))
 	col.LaunchShares = nonZero(segments([]string{"ETH and others", "Stocks and ETFs"}, []string{"c-eth", "c-stock"}, []float64{lc[0] + lc[2] + lc[3], lc[1]}, fmtK))
-	sort.Slice(toks, func(a, b int) bool { return toks[a].VolUSD > toks[b].VolUSD })
-	toks = toks[:min(10, len(toks))]
-	for j := range toks {
-		toks[j].Rank = j + 1
-	}
-	col.TopCoins = toks
-
-	// Daily charts.
+	col.TopCoins = topCoins(s, p.Key, 10)
 	days := dailyAggs(hs, 86400)
-	col.Days = len(days)
-	labels := make([]string, len(days))
-	for j, d := range days {
-		labels[j] = time.Unix(d.T, 0).UTC().Format("Jan 2")
-	}
-	series := func(f func(Agg) float64) []float64 {
-		out := make([]float64, len(days))
-		for j, d := range days {
-			out[j] = f(d.Agg)
-		}
-		return out
-	}
-	chart := func(key, label string, vals []float64, total string, fy func(float64) string) chartView {
-		return chartView{Key: key, Label: label, Total: total, SVG: bars(vals, labels, fy, p)}
-	}
-	col.Charts = []chartView{
-		chart("volume", "Volume", series(func(a Agg) float64 { return a.VolUSD }), fmtUSD(col.All.Volume), fmtUSD),
-		chart("launches", "Launches", series(func(a Agg) float64 { return float64(a.Launches) }), fmtK(float64(col.All.Launches)), fmtK),
-		chart("fees", "Fees", series(fees), fmtUSD(col.All.Fees), fmtUSD),
-		chart("revenue", "Revenue", series(func(a Agg) float64 { return a.PlatformUSD + a.LaunchFees }), fmtUSD(col.All.Protocol), fmtUSD),
-		chart("trades", "Trades", series(func(a Agg) float64 { return float64(a.Swaps) }), fmtK(float64(col.All.Trades)), fmtK),
-	}
-	if tc.HasPrice {
-		col.Charts = append(col.Charts, chart("price", "$"+p.TokenSymbol, series(func(a Agg) float64 { return a.TokenPrice }), fmtPrice(tc.Price), fmtPrice))
-	}
 
 	// Milestones: days from first activity to cumulative volume marks.
 	cum, mi := 0.0, 0
@@ -551,41 +604,52 @@ func nonZero(segs []segment) []segment {
 	return out
 }
 
-// bars renders a single-series daily bar chart: right-side y ticks,
-// first/middle/last x labels, latest bar in the platform colour (--pc).
-func bars(vals []float64, labels []string, fy func(float64) string, p *platform) template.HTML {
-	n := len(vals)
+// stacked renders one bar per bucket with every platform stacked in its own
+// dithered colour (largest at the base): right-side y ticks, first/middle/last
+// x labels. series and pads are in stacking order.
+func stacked(series [][]float64, pads []*platform, labels []string, fy func(float64) string) template.HTML {
+	n := len(labels)
 	if n == 0 {
 		return ""
 	}
-	const w, h, padR, padB, padT = 600.0, 230.0, 58.0, 22.0, 6.0
+	const w, h, padR, padB, padT = 1000.0, 250.0, 60.0, 22.0, 6.0
 	maxV := 0.0
-	for _, v := range vals {
-		maxV = math.Max(maxV, v)
+	for j := range n {
+		t := 0.0
+		for _, s := range series {
+			t += s[j]
+		}
+		maxV = math.Max(maxV, t)
 	}
 	if maxV == 0 {
 		maxV = 1
 	}
+	meta := chartMeta{Mode: "bars", X0: 0, W: w - padR, Labels: labels}
+	for i, p := range pads {
+		meta.Series = append(meta.Series, chartSeries{Name: p.Name, Logo: p.Logo, Values: formatSeries(series[i], fy)})
+	}
 	var b strings.Builder
 	d := newDither()
-	meta := chartAttr(chartMeta{Mode: "bars", X0: 0, W: w - padR, Labels: labels, Series: []chartSeries{{Name: p.Name, Class: fmt.Sprintf("p%d", p.Idx), Values: formatSeries(vals, fy)}}})
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars" role="img" %s>%s`, w, h, meta, d.defs())
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="bars" role="img" %s>%s`, w, h, chartAttr(meta), d.defs(pads))
 	plotW, plotH := w-padR, h-padT-padB
 	for _, f := range []float64{1.0 / 3, 2.0 / 3, 1} {
 		y := padT + plotH*(1-f)
 		fmt.Fprintf(&b, `<line x1="0" y1="%.1f" x2="%g" y2="%.1f" class="grid"/><text x="%g" y="%.1f" class="tick" text-anchor="end">%s</text>`, y, plotW, y, w, y+4, fy(maxV*f))
 	}
 	group := plotW / float64(n)
-	bw := math.Max(1, group*0.68)
-	for j, v := range vals {
-		bh := math.Max(2, plotH*v/maxV)
-		x, y := float64(j)*group+(group-bw)/2, padT+plotH-bh
-		if j == n-1 {
-			fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="glow" %s/>`, x, y, bw, bh, d.glow())
-			d.bar(&b, x, y, bw, bh, true, j, "last")
-			continue
+	bw := math.Max(1, group*0.7)
+	for j := range n {
+		x, y := float64(j)*group+(group-bw)/2, padT+plotH
+		fmt.Fprintf(&b, `<g class="bar" data-j="%d">`, j)
+		for i, p := range pads {
+			if series[i][j] <= 0 {
+				continue
+			}
+			bh := math.Max(1, plotH*series[i][j]/maxV)
+			y -= bh
+			d.seg(&b, x, y, bw, bh, p)
 		}
-		d.bar(&b, x, y, bw, bh, false, j, "")
+		b.WriteString(`</g>`)
 	}
 	for _, j := range []int{0, n / 2, n - 1} {
 		anchor := "start"

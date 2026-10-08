@@ -57,18 +57,15 @@ main { margin: 0 auto; padding: 26px 32px 120px; max-width: 1500px; }
 .seg button.on { background: var(--fg); color: var(--bg); }
 .seg button:hover:not(.on) { color: var(--fg); }
 
-/* two columns sharing one grid: each column contributes 8 visible blocks
-   (header, active range row, chart, trading, top coins, fees, token, all
-   time); column-flow placement puts block N of both pads on the same row,
-   so matching cards always get the same height. */
-.cols { display: grid; grid-template-columns: 1fr 1fr; grid-auto-flow: column; grid-template-rows: repeat(8, auto); gap: 16px 24px; }
-.col { display: contents; }
-.col > * { min-width: 0; }
+/* every launchpad at a glance: 2×2, no card chrome, floating above the leaderboard */
+.quad { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 48px; margin: 4px 0 30px; }
+.padk { padding: 0 4px; scroll-margin-top: 130px; }
+.padk .big { margin-top: 12px; }
 .pad-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px; }
-.pad-head .dot { width: 12px; height: 12px; border-radius: 4px; }
 .pad-head h2 { font-size: 22px; }
-.pad-head a { margin-left: auto; color: var(--muted); font-size: 13px; font-weight: 600; }
+.pad-head a { color: var(--muted); font-size: 13px; font-weight: 600; }
 .pad-head a:hover { color: var(--fg); }
+.pad-head .more-link { margin-left: auto; }
 
 /* today ticker: one TODAY label, then one cell per pad */
 .ticker { display: grid; grid-template-columns: auto repeat(var(--n, 2), minmax(0, 1fr)); border-bottom: 1px solid var(--line); background: var(--card); font-size: 12.5px; height: 36px; }
@@ -107,10 +104,9 @@ body[data-range="24h"] .r-24h, body[data-range="7d"] .r-7d, body[data-range="30d
 .note { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 
 /* chart card */
-/* Fixed structure: total on top, tabs on their own row, chart filling the rest,
-   so both columns' chart cards always lay out identically. */
+/* chart card: totals and metric tabs on top, chart below; the visible total and
+   chart follow data-chart (tabs) and the body's data-range */
 .chart-card { display: flex; flex-direction: column; }
-.chart-head { display: flex; flex-direction: column; gap: 12px; }
 .chart-card .bars { flex: 1; }
 .chart-total { display: none; }
 .chart-total b { font-size: 24px; letter-spacing: -0.02em; }
@@ -136,7 +132,7 @@ body[data-range="24h"] .r-24h, body[data-range="7d"] .r-7d, body[data-range="30d
 .seglegend b { margin-left: auto; color: var(--fg); font-weight: 700; white-space: nowrap; }
 .c-eth { background: var(--up); } .c-stock { background: #4b4f58; } .c-stable { background: #7a7f8a; } .c-other { background: #b4b8c0; }
 .c-acc { background: var(--up); } .c-mid { background: #6fa83d; } .c-dark { background: #3a3e47; } .c-dim { background: #7a7f8a; }
-.col .c-eth, .col .c-acc { background: var(--pc); } .col .c-mid { background: color-mix(in srgb, var(--pc) 55%, #000); }
+.pv .c-eth, .pv .c-acc { background: var(--pc); } .pv .c-mid { background: color-mix(in srgb, var(--pc) 55%, #000); }
 .c-part { background: color-mix(in srgb, var(--pc, #9aa0aa) 40%, #8a8f9a); }
 
 /* tables */
@@ -159,7 +155,7 @@ tr:last-child td { border-bottom: 0; }
 .updated a { text-decoration: underline; }
 
 @media (max-width: 1100px) {
-  .cols { grid-template-columns: 1fr; grid-auto-flow: row; grid-template-rows: none; }
+  .quad, .duo { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   main { padding: 16px 16px 110px; }
@@ -171,7 +167,7 @@ tr:last-child td { border-bottom: 0; }
   .tk:nth-of-type(even) { border-left: 1px solid var(--line); }
   .tk:nth-of-type(n+3) { border-top: 1px solid var(--line); }
   .big { grid-template-columns: 1fr 1fr; gap: 10px; }
-  .big > div { border-left: 0; padding: 0; }
+  .big > div, .big > div:first-child { border-left: 0; padding: 0; }
 }
 
 /* icons */
@@ -179,7 +175,6 @@ tr:last-child td { border-bottom: 0; }
 .ico.fb { display: inline-grid; place-items: center; font-style: normal; font-size: 9px; font-weight: 800; color: var(--muted); letter-spacing: 0; }
 .ico.sm { width: 14px; height: 14px; }
 .plogo { width: 26px; height: 26px; border-radius: 8px; object-fit: cover; }
-.pad-head .dot { display: none; }
 .coin { display: flex; align-items: center; gap: 10px; }
 .coin .ico { width: 30px; height: 30px; }
 .pair { display: inline-flex; align-items: center; gap: 6px; }
@@ -297,8 +292,7 @@ body { background-image: radial-gradient(rgba(255,255,255,.07) 1px, transparent 
 .tip .lbl { color: var(--muted); font-size: 11.5px; margin-bottom: 4px; }
 .tip .row { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); }
 .tip .row b { margin-left: auto; color: var(--fg); padding-left: 14px; font-variant-numeric: tabular-nums; }
-.tip .dot { width: 8px; height: 8px; border-radius: 2px; }
-.tip .dot { background: var(--pc, #b4b8c0); }
+.tip .dot { width: 14px; height: 14px; border-radius: 4px; object-fit: cover; }
 .bars .xh { stroke: rgba(255,255,255,.35); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; pointer-events: none; }
 .bars { cursor: crosshair; }
 
@@ -385,16 +379,43 @@ body[data-range="24h"] .lb.r-24h, body[data-range="7d"] .lb.r-7d, body[data-rang
 .sync::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: blink 1.4s infinite; }
 @keyframes blink { 50% { opacity: .25; } }
 
-/* side by side: each column picks its pad */
-.sect { font-size: 22px; margin: 0 4px 14px; scroll-margin-top: 130px; }
+/* the comparison chart */
 .pad-head .pn { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .pad-head .pn a { margin: 2px 0 0; font-size: 12.5px; }
 .pad-head .sync { font-size: 12px; }
-.pick { margin-left: auto; display: flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--card-2); flex: none; }
-.pad-head .pick a { margin: 0; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; opacity: .42; filter: grayscale(.7); transition: opacity .15s, filter .15s, box-shadow .15s; }
-.pad-head .pick a:hover { opacity: 1; filter: none; }
-.pad-head .pick a.on { opacity: 1; filter: none; box-shadow: 0 0 0 2px var(--pc); }
+.cmpc { margin-top: 16px; }
+.cmp-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.clegend { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.clegend span { display: inline-flex; align-items: center; gap: 7px; }
+.clegend img { width: 16px; height: 16px; border-radius: 5px; object-fit: cover; }
+.clegend b { color: var(--fg); }
+
+/* detail cards: each picks its launchpad */
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; margin-top: 16px; align-items: stretch; }
+/* Cards in a row share its height; the shorter one keeps its closing note at
+   the bottom. Long month tables scroll inside a capped area. */
+.duo > .card { display: flex; flex-direction: column; min-width: 0; }
+.duo .pv:not([hidden]) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.duo .pv > .note:last-child, .ptokc .note { margin-top: auto; padding-top: 14px; }
+.mscroll { max-height: 266px; margin-top: 14px; overflow-y: auto; scrollbar-width: thin; }
+.mscroll .months { margin: 0; }
+.mscroll .months th { position: sticky; top: 0; background: var(--card); z-index: 1; }
+.ph { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.ph h3 { margin: 0; }
+.cap.first { margin-top: 0; }
+.pick { display: flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--card-2); flex: none; }
+.pick button { border: 0; background: none; padding: 0; cursor: pointer; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; opacity: .42; filter: grayscale(.7); transition: opacity .15s, filter .15s, box-shadow .15s; }
+.pick button:hover { opacity: 1; filter: none; }
+.pick button.on { opacity: 1; filter: none; box-shadow: 0 0 0 2px var(--pc); }
+.pick button.all { width: auto; padding: 0 11px; border-radius: 999px; color: var(--fg); font: 700 12.5px var(--font); filter: none; }
+.pick button.all.on { background: var(--fg); color: var(--bg); box-shadow: none; }
 .pick img { width: 22px; height: 22px; border-radius: 7px; object-fit: cover; }
+.padmini { width: 12px; height: 12px; border-radius: 4px; vertical-align: -2px; margin-right: 5px; }
+.pickable [data-v]:not([data-v="all"]) .padmini { display: none; }
+.ptok td small { font-size: 11.5px; }
+.ptok .coin .ico { width: 30px; height: 30px; }
+.ptok td { padding: 12px 6px; }
+.lst + .lst::before { content: ", "; }
 
 /* volume dominance donut, right of the leaderboard */
 .dom { border-left: 1px solid var(--line); padding: 0 4px 8px 22px; display: flex; flex-direction: column; min-width: 0; }
@@ -409,7 +430,7 @@ body[data-range="24h"] .dn.r-24h, body[data-range="7d"] .dn.r-7d, body[data-rang
 .donut .dl { fill: var(--muted); font: 700 10.5px var(--font); text-anchor: middle; text-transform: uppercase; letter-spacing: .1em; }
 .dn figcaption { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; width: 100%; font-size: 12.5px; color: var(--muted); font-weight: 600; }
 .dn figcaption span { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; }
-.dn figcaption i { width: 8px; height: 8px; border-radius: 2px; background: var(--pc); flex: none; }
+.dn figcaption img { width: 16px; height: 16px; border-radius: 5px; object-fit: cover; flex: none; }
 .dn figcaption b { margin-left: auto; color: var(--fg); font-variant-numeric: tabular-nums; }
 
 @media (max-width: 1440px) { .lb .l { display: none; } }
@@ -429,5 +450,5 @@ body[data-range="24h"] .dn.r-24h, body[data-range="7d"] .dn.r-7d, body[data-rang
   .lb td, .lb th { padding-left: 6px; padding-right: 6px; }
   .lp img { width: 28px; height: 28px; }
   .lp small { display: none; }
-  .pick a { width: 26px; height: 26px; }
+  .pick button { width: 26px; height: 26px; }
 }

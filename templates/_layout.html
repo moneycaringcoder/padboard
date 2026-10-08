@@ -30,7 +30,7 @@
 <div class="ticker" id="ticker" style="--n:{{len .Ticker}}">
   <div class="tk-label">Today</div>
   {{range .Ticker}}
-  <a class="tk p{{.Idx}}" href="/?a={{.Key}}#cmp" title="{{.Name}} today: {{usd .Today.Volume}} volume · {{k .Today.Trades}} trades · {{k .Today.Launches}} launches · {{usd .Today.Fees}} fees">
+  <a class="tk p{{.Idx}}" href="/#pad-{{.Key}}" title="{{.Name}} today: {{usd .Today.Volume}} volume · {{k .Today.Trades}} trades · {{k .Today.Launches}} launches · {{usd .Today.Fees}} fees">
     <span class="tn"><img src="{{.Logo}}" alt=""><b class="nm">{{.Name}}</b></span>
     <span><em class="{{trend .Today.DVolume}}">{{usd .Today.Volume}}</em> vol</span>
     <span class="tl"><em class="{{trend .Today.DLaunches}}">{{k .Today.Launches}}</em> launches</span>
@@ -47,7 +47,7 @@
 Every platform launches tokens into Uniswap v4 pools. Volume is the quote-side delta of each Swap on a launched pool; ETH/WETH quotes are priced hourly, other quotes at snapshot spot. Fees are what the contracts credited or collected (Stockereum FeeEscrow.Credited, Sender locker FeesCollected / hook FeeDistributed, Stroid hook FeeAccrued / PartnerFeeAccrued, Clanker locker ClaimedRewards / hook ClaimProtocolFees), not volume x rate. Clanker fees count only when collected from the locked position. Token prices derive from the pool sqrtPriceX96 after the latest swap; FDV = price x totalSupply().
 
 ## Pages
-- {{.Origin}}/ : Overview — leaderboard of every launchpad for 24h/7d/30d/all, then any two side by side (?a=&b=): charts, fee routing, buyback & burn, top coins
+- {{.Origin}}/ : Overview — leaderboard and volume dominance for 24h/7d/30d/all, a card per launchpad, one stacked chart comparing every launchpad (volume, launches, fees, revenue, trades), then top coins, fee routing, trading and platform tokens with a launchpad picker
 - {{.Origin}}/tokens : every launched token, sortable, 100 per page
 - {{.Origin}}/api : API documentation
 
@@ -107,7 +107,7 @@ Responses carry ETag / Last-Modified and only change when a sync runs. Data is 1
         xh.setAttribute('x1', cx); xh.setAttribute('x2', cx); xh.setAttribute('y1', 0); xh.setAttribute('y2', vb.height - 22);
         svg.querySelectorAll('.hot').forEach(h => h.classList.remove('hot'));
         svg.querySelectorAll(`g.bar[data-j="${j}"]`).forEach(g => g.classList.add('hot'));
-        const rows = m.series.map(s => `<div class="row"><i class="dot ${s.cls}"></i>${s.name}<b>${s.values[j] || '–'}</b></div>`).join('');
+        const rows = m.series.map(s => `<div class="row">${s.logo ? `<img class="dot" src="${s.logo}" alt="">` : ''}${s.name}<b>${s.values[j] || '–'}</b></div>`).join('');
         tip.innerHTML = `<div class="lbl">${m.labels[j]}</div>${rows}`;
         tip.hidden = false;
       }

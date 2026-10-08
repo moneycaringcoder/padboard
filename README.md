@@ -35,8 +35,9 @@ Environment:
 | `SYNC_INTERVAL` | `5m`    | how often new blocks are pulled                  |
 | `SYNC_ONCE`     | unset   | if set, exit after one sync once backfill is done (for cron-style use) |
 
-Pages: `/` overview (every launchpad ranked for 24h/7d/30d/all, then any two
-side by side via `?a=&b=`; refreshes itself every minute while visible),
+Pages: `/` overview (every launchpad ranked for 24h/7d/30d/all with a dominance
+donut, a card per launchpad, one stacked chart comparing them all, and detail
+cards with a launchpad picker; refreshes itself every minute while visible),
 `/tokens` (every launch, paged by 100), `/api` (docs). JSON: `/api/v1/summary`,
 `/api/v1/daily?interval=day|hour`, `/api/v1/tokens?pad&sort&q&page`,
 `/api/v1/tokens/{address}`, `/api/snapshot.json`; free, 60 req/min per IP.

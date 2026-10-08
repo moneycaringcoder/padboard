@@ -173,10 +173,7 @@ func (c *collector) apiToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"unknown token"}`, 404)
 		return
 	}
-	row := tokenRow{Token: tok, QuoteSymbol: "?", FDV: tok.PriceUSD * tok.Supply}
-	if q := s.Quotes[tok.Quote]; q != nil && q.Symbol != "" {
-		row.QuoteSymbol = q.Symbol
-	}
+	row := newTokenRow(s, tok)
 	writeJSON(w, toAPIToken(row))
 }
 

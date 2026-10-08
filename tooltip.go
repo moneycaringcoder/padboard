@@ -17,7 +17,7 @@ type chartMeta struct {
 
 type chartSeries struct {
 	Name   string   `json:"name"`
-	Class  string   `json:"cls"`    // pN: the platform colour of the tooltip dot
+	Logo   string   `json:"logo"`   // the platform's icon, shown in the tooltip row
 	Values []string `json:"values"` // pre-formatted; "" = no data
 }
 
